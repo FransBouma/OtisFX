@@ -14,11 +14,11 @@ NAMESPACE_ENTER(OFX)
  #define RENDERMODE RGBA32F
 #endif
 
-//textures
+// textures
 texture   OFX_FragmentBuffer1 	{ Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; MipLevels = 8; Format = RENDERMODE;};	
 texture   OFX_FragmentBuffer2 	{ Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; MipLevels = 8; Format = RENDERMODE;};	
 
-//samplers
+// samplers
 sampler2D OFX_SamplerFragmentBuffer2
 {
 	Texture = OFX_FragmentBuffer2;
@@ -39,13 +39,10 @@ sampler2D OFX_SamplerFragmentBuffer1
 	AddressV = Clamp;
 };
 
-//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-// Functions														     //
-//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
+// general pixel shaders
 void PS_OFX_Init(float4 vpos : SV_Position, float2 texcoord : TEXCOORD, out float4 colFragment : SV_Target0) 
 {
-	colFragment = tex2D(RFX_originalColor, texcoord.xy);
+	colFragment = tex2D(RFX_backbufferColor, texcoord.xy);
 }
 
 float4 PS_OFX_Overlay(float4 vpos : SV_Position, float2 texcoord : TEXCOORD) : SV_Target
@@ -53,8 +50,9 @@ float4 PS_OFX_Overlay(float4 vpos : SV_Position, float2 texcoord : TEXCOORD) : S
 	return tex2D(OFX_SamplerFragmentBuffer2, texcoord.xy);
 }
 
-#if USE_EMPHASIZE
-technique OFX_Init_Tech  < enabled = true; >
+// init technique to read the back buffer into the two fragment buffers. Disabled for now as they're not used
+/*
+technique OFX_Init_Tech  < enabled = false; >
 {
 	pass Init_OFX_FragmentBuffer2
 	{
@@ -69,7 +67,7 @@ technique OFX_Init_Tech  < enabled = true; >
 		RenderTarget = OFX_FragmentBuffer1;
 	}
 }
-#endif
+*/
 
 #include OFX_SETTINGS_UNDEF
 
