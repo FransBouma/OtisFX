@@ -19,7 +19,7 @@ void PS_OFX_EMZ_CalculateCoCFragments(float4 vpos : SV_Position, float2 texcoord
 	const float scenefocus =  EMZ_MANUALFOCUSDEPTH;
 	const float desaturateFullRange = EMZ_FOCUSRANGEDEPTH+EMZ_FOCUSEDGEDEPTH;
 	float depthdiff = abs(scenedepth-scenefocus);
-	depthdiff = (depthdiff > desaturateFullRange) ? depthdiff = 1.0 : smoothstep(scenefocus, scenefocus+desaturateFullRange, scenefocus + depthdiff);
+	depthdiff = (depthdiff > desaturateFullRange) ? 1.0 : smoothstep(scenefocus, scenefocus+desaturateFullRange, scenefocus + depthdiff);
 	cocFragment = saturate(float4(depthdiff, scenedepth, scenefocus, 0));
 }
 
@@ -33,7 +33,7 @@ void PS_OFX_EMZ_Desaturate(float4 vpos : SV_Position, float2 texcoord : TEXCOORD
 	outFragment = lerp(colFragment, desColor, saturate(depthDiffCoC * EMZ_EffectFactor));
 }
 
-technique OFX_EMZ_Tech <bool enabled = RFX_Start_Enabled; int toggle = EMZ_ToggleKey; >
+technique OFX_EMZ_Tech <bool enabled = false; int toggle = EMZ_ToggleKey; >
 {
 	pass OFX_EMZ_CoC
 	{
