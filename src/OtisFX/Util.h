@@ -7,16 +7,16 @@ NAMESPACE_ENTER(OFX)
 #include OFX_SETTINGS_DEF
 
 #if( HDR_MODE == 0)
- #define RENDERMODE RGBA8
+ #define OFX_RENDERMODE RGBA8
 #elif( HDR_MODE == 1)
- #define RENDERMODE RGBA16F
+ #define OFX_RENDERMODE RGBA16F
 #else
- #define RENDERMODE RGBA32F
+ #define OFX_RENDERMODE RGBA32F
 #endif
 
 // textures
-texture   OFX_FragmentBuffer1 	{ Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; MipLevels = 8; Format = RENDERMODE;};	
-texture   OFX_FragmentBuffer2 	{ Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; MipLevels = 8; Format = RENDERMODE;};	
+texture   OFX_FragmentBuffer1 	{ Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; MipLevels = 8; Format = OFX_RENDERMODE;};	
+texture   OFX_FragmentBuffer2 	{ Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; MipLevels = 8; Format = OFX_RENDERMODE;};	
 
 // samplers
 sampler2D OFX_SamplerFragmentBuffer2

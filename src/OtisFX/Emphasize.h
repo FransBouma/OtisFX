@@ -6,8 +6,8 @@ NAMESPACE_ENTER(OFX)
 float CalculateDepthDiffCoC(float2 texcoord : TEXCOORD)
 {
 	const float scenedepth = tex2D(RFX_depthTexColor, texcoord).r;
-	const float scenefocus =  EMZ_MANUALFOCUSDEPTH;
-	const float desaturateFullRange = EMZ_FOCUSRANGEDEPTH+EMZ_FOCUSEDGEDEPTH;
+	const float scenefocus =  EMZ_ManualFocusDepth;
+	const float desaturateFullRange = EMZ_FocusRangeDepth+EMZ_FocusEdgeDepth;
 	const float depthdiff = abs(scenedepth-scenefocus);
 	return saturate((depthdiff > desaturateFullRange) ? 1.0 : smoothstep(scenefocus, scenefocus+desaturateFullRange, scenefocus + depthdiff));
 }
