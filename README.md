@@ -14,6 +14,11 @@ Once the files are in place, open `Pipeline.cfg` in a text editor, e.g. Notepad+
 
 near the top of the file, with the other lines with `Util`. 
 
+Below the line `#include EFFECT(McFX, SSAO)` add
+``` java
+#include EFFECT(OtisFX, DepthHaze)
+```
+
 At the bottom, add:
 ``` java
 #include EFFECT(OtisFX, Emphasize)
@@ -32,6 +37,7 @@ To enable the effects in-game, press the assigned hotkey of the effect. These ar
 
  * Emphasize: F8
  * GoldenRatio: F6
+ * Depth Haze: F4
  
 ### Effects included
 The following effects are currently included: 
@@ -41,4 +47,7 @@ Emphasize is an effect which allows you to make a part of the scene pop out more
 
 #### GoldenRatio
 This effect is rather simple, but can be a great help for taking screenshots with proper composition. It displays 4 so called 'golden ratio' fibonacci spirals on the screen, blended on top of the actual scene. You can then position your camera and zoom level to meet the lines on screen to have everything aligned according to the 'golden ratio'. For more information about the golden ratio and how it's used in photography, see e.g. [Composition with Fibonacci's ratio](http://digital-photography-school.com/divine-composition-with-fibonaccis-ratio-the-rule-of-thirds-on-steroids/) and [Golden ratio](https://en.wikipedia.org/wiki/Golden_ratio)
+
+#### Depth Haze
+This effect is a simple depth-blur which makes far away objects look slightly blurred. It's more subtle than a Depth of Field effect as it's not based on a lens, but on how the human eye sees far away objects outdoors: detail is lost and the farther away an object, e.g. a tower, the less sharp the human eye sees it. Modern render engines tend to render far away objects crisp and sharp which makes the far away objects too sharp to look natural. This effect mimics the 'Depth of field' effect in The Witcher 3. In The Witcher 3, the freecam mod disables this effect however by using 'Depth Haze' you can make far-away objects look properly blurred like in real life again. 
 
