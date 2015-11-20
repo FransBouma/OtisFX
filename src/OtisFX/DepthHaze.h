@@ -26,7 +26,7 @@ void PS_OFX_DEH_BlockBlurHorizontal(in float4 pos : SV_Position, in float2 texco
 	[loop]
 	for(int i = 1; i < 5; ++i) 
 	{
-		float2 sourceCoords = texcoord + float2(i * RFX_pixelSize.x, 0.0);
+		float2 sourceCoords = texcoord + float2(i * RFX_PixelSize.x, 0.0);
 		float4 neighborFragment = tex2D(RFX_backbufferColor, sourceCoords);
 		// detect contrast using grey scale comparison. Ignore high contrasting pixels to avoid edge bleed and shimmering
 		if(abs(originalGrayscale - ConvertToGrey(neighborFragment)) < DEH_EdgeBleedThreshold)
@@ -34,7 +34,7 @@ void PS_OFX_DEH_BlockBlurHorizontal(in float4 pos : SV_Position, in float2 texco
 			color += neighborFragment;
 			n++;
 		}
-		sourceCoords = texcoord - float2(i * RFX_pixelSize.x, 0.0);
+		sourceCoords = texcoord - float2(i * RFX_PixelSize.x, 0.0);
 		neighborFragment = tex2D(RFX_backbufferColor, sourceCoords);
 		if(abs(originalGrayscale - ConvertToGrey(neighborFragment)) < DEH_EdgeBleedThreshold)
 		{
@@ -54,14 +54,14 @@ void PS_OFX_DEH_BlockBlurVertical(in float4 pos : SV_Position, in float2 texcoor
 	[loop]
 	for(int j = 1; j < 5; ++j) 
 	{
-		float2 sourceCoords = texcoord + float2(0.0, j * RFX_pixelSize.y);
+		float2 sourceCoords = texcoord + float2(0.0, j * RFX_PixelSize.y);
 		float4 neighborFragment = tex2D(OFX_SamplerFragmentBuffer1, sourceCoords);
 		if(abs(originalGrayscale - ConvertToGrey(neighborFragment)) < DEH_EdgeBleedThreshold)
 		{
 			color += neighborFragment;
 			n++;
 		}
-		sourceCoords = texcoord - float2(0.0, j * RFX_pixelSize.y);
+		sourceCoords = texcoord - float2(0.0, j * RFX_PixelSize.y);
 		neighborFragment = tex2D(OFX_SamplerFragmentBuffer1, sourceCoords);
 		if(abs(originalGrayscale - ConvertToGrey(neighborFragment)) < DEH_EdgeBleedThreshold)
 		{
