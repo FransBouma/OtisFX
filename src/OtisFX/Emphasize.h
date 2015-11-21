@@ -2,7 +2,12 @@ NAMESPACE_ENTER(OFX)
 #include OFX_SETTINGS_DEF
 
 #if USE_EMPHASIZE
-
+///////////////////////////////////////////////////////////////////
+// This effect works like a simple DoF for desaturating what otherwise would have been blurred.
+//
+// It works by determining whether a pixel is outside the emphasize zone using the depth buffer
+// if so, the pixel is desaturated and blended with the color specified in the cfg file. 
+///////////////////////////////////////////////////////////////////
 float CalculateDepthDiffCoC(float2 texcoord : TEXCOORD)
 {
 	const float scenedepth = tex2D(RFX_depthTexColor, texcoord).r;

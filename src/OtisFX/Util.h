@@ -73,4 +73,4 @@ technique OFX_Init_Tech  < enabled = false; >
 
 NAMESPACE_LEAVE()
 
-#pragma message "OtisFX 0.1 by Otis / Infuse Project\n\n"
+#pragma message "OtisFX 0.2 by Otis / Infuse Project\n\n"
