@@ -10,37 +10,33 @@ NAMESPACE_ENTER(OFX)
 //
 // It works by first blurring the screen buffer using 2-pass block blur and
 // then blending the blurred result into the screen buffer based on depth
+// it uses depth-difference for extra weight in the blur method so edges
+// of high-contrasting lines with high depth diffence don't bleed.
 ///////////////////////////////////////////////////////////////////
 
-float ConvertToGrey(float4 fragment)
+float CalculateWeight(float distanceFromSource, float sourceDepth, float neighborDepth)
 {
-	return dot(fragment.rgb, float3(0.3, 0.59, 0.11));
+	return (1.0 - abs(sourceDepth - neighborDepth)) * (1/distanceFromSource) * neighborDepth;
 }
 
 void PS_OFX_DEH_BlockBlurHorizontal(in float4 pos : SV_Position, in float2 texcoord : TEXCOORD, out float4 outFragment : SV_Target0)
 {
 	float4 color = tex2D(RFX_backbufferColor, texcoord);
-	float originalGrayscale = ConvertToGrey(color);
+	float colorDepth = tex2D(RFX_depthTexColor,texcoord).r;
 	float n = 1.0f;
 
 	[loop]
-	for(int i = 1; i < 5; ++i) 
+	for(float i = 1; i < 5; ++i) 
 	{
 		float2 sourceCoords = texcoord + float2(i * RFX_PixelSize.x, 0.0);
-		float4 neighborFragment = tex2D(RFX_backbufferColor, sourceCoords);
-		// detect contrast using grey scale comparison. Ignore high contrasting pixels to avoid edge bleed and shimmering
-		if(abs(originalGrayscale - ConvertToGrey(neighborFragment)) < DEH_EdgeBleedThreshold)
-		{
-			color += neighborFragment;
-			n++;
-		}
+		float weight = CalculateWeight(i, colorDepth, tex2D(RFX_depthTexColor, sourceCoords).r);
+		color += (tex2D(RFX_backbufferColor, sourceCoords) * weight);
+		n+=weight;
+		
 		sourceCoords = texcoord - float2(i * RFX_PixelSize.x, 0.0);
-		neighborFragment = tex2D(RFX_backbufferColor, sourceCoords);
-		if(abs(originalGrayscale - ConvertToGrey(neighborFragment)) < DEH_EdgeBleedThreshold)
-		{
-			color += neighborFragment;
-			n++;
-		}
+		weight = CalculateWeight(i, colorDepth, tex2D(RFX_depthTexColor,sourceCoords).r);
+		color += (tex2D(RFX_backbufferColor, sourceCoords) * weight);
+		n+=weight;
 	}
 	outFragment = color/n;
 }
@@ -48,36 +44,29 @@ void PS_OFX_DEH_BlockBlurHorizontal(in float4 pos : SV_Position, in float2 texco
 void PS_OFX_DEH_BlockBlurVertical(in float4 pos : SV_Position, in float2 texcoord : TEXCOORD, out float4 outFragment : SV_Target0)
 {
 	float4 color = tex2D(OFX_SamplerFragmentBuffer1, texcoord);
-	float originalGrayscale = ConvertToGrey(color);
+	float colorDepth = tex2D(RFX_depthTexColor,texcoord).r;
 	float n=1.0f;
 	
 	[loop]
-	for(int j = 1; j < 5; ++j) 
+	for(float j = 1; j < 5; ++j) 
 	{
 		float2 sourceCoords = texcoord + float2(0.0, j * RFX_PixelSize.y);
-		float4 neighborFragment = tex2D(OFX_SamplerFragmentBuffer1, sourceCoords);
-		if(abs(originalGrayscale - ConvertToGrey(neighborFragment)) < DEH_EdgeBleedThreshold)
-		{
-			color += neighborFragment;
-			n++;
-		}
+		float weight = CalculateWeight(j, colorDepth, tex2D(RFX_depthTexColor,sourceCoords).r);
+		color += (tex2D(OFX_SamplerFragmentBuffer1, sourceCoords) * weight);
+		n+=weight;
+
 		sourceCoords = texcoord - float2(0.0, j * RFX_PixelSize.y);
-		neighborFragment = tex2D(OFX_SamplerFragmentBuffer1, sourceCoords);
-		if(abs(originalGrayscale - ConvertToGrey(neighborFragment)) < DEH_EdgeBleedThreshold)
-		{
-			color += neighborFragment;
-			n++;
-		}
+		weight = CalculateWeight(j, colorDepth, tex2D(RFX_depthTexColor,sourceCoords).r);
+		color += (tex2D(OFX_SamplerFragmentBuffer1, sourceCoords) * weight);
+		n+=weight;
 	}
 	outFragment = color/n;
 }
 
 void PS_OFX_DEH_BlendBlurWithNormalBuffer(float4 vpos: SV_Position, float2 texcoord: TEXCOORD, out float4 fragment: SV_Target0)
 {
-	float4 blurredFragment = tex2D(OFX_SamplerFragmentBuffer2, texcoord);
-	float4 screenBufferFragment = tex2D(RFX_backbufferColor, texcoord);
-	float screenDepth = tex2D(RFX_depthTexColor,texcoord).r;
-	fragment = lerp(screenBufferFragment, blurredFragment, clamp(screenDepth * DEH_EffectStrength, 0, 1)); 
+	fragment = lerp(tex2D(RFX_backbufferColor, texcoord), tex2D(OFX_SamplerFragmentBuffer2, texcoord), 
+					clamp( tex2D(RFX_depthTexColor,texcoord).r * DEH_EffectStrength, 0, 1)); 
 }
 
 technique OFX_DEH_Tech <bool enabled = false; int toggle = DEH_ToggleKey; >
