@@ -16,7 +16,7 @@ sampler2D	GOR_samplerSpirals
 
 void PS_OFX_GOR_RenderSpirals(float4 vpos : SV_Position, float2 texcoord : TEXCOORD, out float4 outFragment : SV_Target0)
 {
-	float4 colFragment = tex2D(RFX_backbufferColor, float4(texcoord, 0, 0));
+	float4 colFragment = tex2D(RFX_backbufferColor, texcoord);
 	float phiValue = ((1.0 + sqrt(5.0))/2.0);
 	float aspectRatio = (float(BUFFER_WIDTH)/float(BUFFER_HEIGHT));
 	float idealWidth = float(BUFFER_HEIGHT) * phiValue;
@@ -35,8 +35,8 @@ void PS_OFX_GOR_RenderSpirals(float4 vpos : SV_Position, float2 texcoord : TEXCO
 		sourceCoordFactor = float4(float(BUFFER_WIDTH)/idealWidth, 1.0, idealWidth/float(BUFFER_WIDTH), 1.0);
 	}
 #endif
-	float4 spiralFragment = tex2D(GOR_samplerSpirals, float4((texcoord.x * sourceCoordFactor.x) - ((1.0-sourceCoordFactor.z)/2.0),
-														    (texcoord.y * sourceCoordFactor.y) - ((1.0-sourceCoordFactor.w)/2.0), 0, 0));
+	float4 spiralFragment = tex2D(GOR_samplerSpirals, float2((texcoord.x * sourceCoordFactor.x) - ((1.0-sourceCoordFactor.z)/2.0),
+														    (texcoord.y * sourceCoordFactor.y) - ((1.0-sourceCoordFactor.w)/2.0)));
 	outFragment = saturate(colFragment + (spiralFragment * GOR_Opacity));
 }
 

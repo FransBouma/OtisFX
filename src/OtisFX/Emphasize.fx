@@ -20,7 +20,7 @@ float CalculateDepthDiffCoC(float2 texcoord : TEXCOORD)
 void PS_OFX_EMZ_Desaturate(float4 vpos : SV_Position, float2 texcoord : TEXCOORD, out float4 outFragment : SV_Target0)
 {
 	const float depthDiffCoC = CalculateDepthDiffCoC(texcoord.xy);	
-	const float4 colFragment = tex2D(RFX_backbufferColor, float4(texcoord, 0, 0));
+	const float4 colFragment = tex2D(RFX_backbufferColor, texcoord);
 	const float greyscaleAverage = (colFragment.x + colFragment.y + colFragment.z) / 3.0;
 	float4 desColor = float4(greyscaleAverage, greyscaleAverage, greyscaleAverage, depthDiffCoC);
 	desColor = lerp(desColor, float4(EMZ_BlendColor, depthDiffCoC), EMZ_BlendFactor);
