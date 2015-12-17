@@ -9,7 +9,7 @@ https://github.com/crosire/reshade-shaders
 You can use the code here with Reshade 1.0 if you want, see below for instructions. 
 
 ### Prerequisites
-You should have [Reshade](http://reshade.me) v1.0 or higher. If you're using v1.1, please get the latest Reshade shaders from https://github.com/crosire/reshade-shaders instead.
+You should have [Reshade](http://reshade.me) v1.0 or higher. If you're using v1.1, it's easier to simply get the latest Reshade shaders from https://github.com/crosire/reshade-shaders instead. 
 If you're using Reshade 1.0, please rename the .fx files in 'OtisFX' to .h files. The .fx file extension is for Reshade 1.1.
 
 ### How to install
