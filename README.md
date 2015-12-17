@@ -1,6 +1,13 @@
 # OtisFX
 A small set of effects for [Reshade](http://reshade.me). 
 
+----------------
+# This project has been merged with the official Reshade shader library
+To get the latest code for OtisFX, please obtain the full shader library for the latest Reshade here: 
+https://github.com/crosire/reshade-shaders
+
+You can use the code here with Reshade 1.0 if you want, see below for instructions. 
+
 ### Prerequisites
 You should have [Reshade](http://reshade.me) v1.0 or higher.
 
