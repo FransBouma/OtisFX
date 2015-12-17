@@ -9,7 +9,8 @@ https://github.com/crosire/reshade-shaders
 You can use the code here with Reshade 1.0 if you want, see below for instructions. 
 
 ### Prerequisites
-You should have [Reshade](http://reshade.me) v1.0 or higher.
+You should have [Reshade](http://reshade.me) v1.0 or higher. If you're using v1.1, please get the latest Reshade shaders from https://github.com/crosire/reshade-shaders instead.
+If you're using Reshade 1.0, please rename the .fx files in 'OtisFX' to .h files. The .fx file extension is for Reshade 1.1.
 
 ### How to install
 Download the zip using the button on the right which says 'Download ZIP'. This will give you a file called 'Master.zip', which contains all code. Unpack the zip and go to the `src` folder. Copy all files and folders inside the `src` folder into the `Reshade` folder in your game's bin folder. This `Reshade` folder should already be there and it already should have a bunch of .cfg files, like `Pipeline.cfg`. If you're using the Reshade Mediator tool, you should copy the contents of the `src` folder to the local source folder of your profile in Mediator. 
