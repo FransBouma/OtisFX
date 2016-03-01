@@ -12,6 +12,10 @@ NAMESPACE_ENTER(OFX)
 // then blending the blurred result into the screen buffer based on depth
 // it uses depth-difference for extra weight in the blur method so edges
 // of high-contrasting lines with high depth diffence don't bleed.
+//
+// Additionally a depth-based fog feature is implemented, which fogs
+// based on depth and a factor and sees the horizontal middle of the screen as 
+// the horizon, and fogs more around that area, avoiding a fogged sky.
 ///////////////////////////////////////////////////////////////////
 
 float CalculateWeight(float distanceFromSource, float sourceDepth, float neighborDepth)
@@ -65,8 +69,12 @@ void PS_OFX_DEH_BlockBlurVertical(in float4 pos : SV_Position, in float2 texcoor
 
 void PS_OFX_DEH_BlendBlurWithNormalBuffer(float4 vpos: SV_Position, float2 texcoord: TEXCOORD, out float4 fragment: SV_Target0)
 {
-	fragment = lerp(tex2D(RFX_backbufferColor, texcoord), tex2D(OFX_SamplerFragmentBuffer2, texcoord), 
-					clamp( tex2D(RFX_depthTexColor,texcoord).r * DEH_EffectStrength, 0, 1)); 
+	float depth = tex2D(RFX_depthTexColor,texcoord).r;
+	float4 blendedFragment = lerp(tex2D(RFX_backbufferColor, texcoord), tex2D(OFX_SamplerFragmentBuffer2, texcoord),
+								  clamp(depth  * DEH_EffectStrength, 0.0, 1.0)); 
+	float yFactor = clamp(texcoord.y > 0.5 ? 1-((texcoord.y-0.5)*2.0) : texcoord.y * 2.0, 0, 1);
+	fragment = lerp(blendedFragment, float4(DEH_FogColor, blendedFragment.r), 
+					clamp((depth-DEH_FogStart) * yFactor * DEH_FogFactor, 0.0, 1.0));
 }
 
 technique OFX_DEH_Tech <bool enabled = false; int toggle = DEH_ToggleKey; >
