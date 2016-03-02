@@ -1,16 +1,12 @@
 # OtisFX
 A small set of effects for [Reshade](http://reshade.me). 
 
-----------------
-# This project has been merged with the official Reshade shader library
-To get the latest code for OtisFX, please obtain the full shader library for the latest Reshade here: 
-https://github.com/crosire/reshade-shaders
-
-You can use the code here with Reshade 1.0 if you want, see below for instructions. 
+It's been merged into the [official reshade shader library](https://github.com/crosire/reshade-shaders), but as that library
+is for Reshade 2.0+, the shaders are kept here as well for Reshade 1.x. 
 
 ### Prerequisites
-You should have [Reshade](http://reshade.me) v1.0 or higher. If you're using v1.1, it's easier to simply get the latest Reshade shaders from https://github.com/crosire/reshade-shaders instead. 
-If you're using Reshade 1.0, please rename the .fx files in 'OtisFX' to .h files. The .fx file extension is for Reshade 1.1.
+You should have [Reshade](http://reshade.me) v1.0 or higher.
+After that please rename the .fx files in 'OtisFX' to .h files, so e.g. `depthhaze.fx` should be renamed to `depthhaze.h`.
 
 ### How to install
 Download the zip using the button on the right which says 'Download ZIP'. This will give you a file called 'Master.zip', which contains all code. Unpack the zip and go to the `src` folder. Copy all files and folders inside the `src` folder into the `Reshade` folder in your game's bin folder. This `Reshade` folder should already be there and it already should have a bunch of .cfg files, like `Pipeline.cfg`. If you're using the Reshade Mediator tool, you should copy the contents of the `src` folder to the local source folder of your profile in Mediator. 
@@ -57,5 +53,7 @@ Emphasize is an effect which allows you to make a part of the scene pop out more
 This effect is rather simple, but can be a great help for taking screenshots with proper composition. It displays 4 so called 'golden ratio' fibonacci spirals on the screen, blended on top of the actual scene. You can then position your camera and zoom level to meet the lines on screen to have everything aligned according to the 'golden ratio'. For more information about the golden ratio and how it's used in photography, see e.g. [Composition with Fibonacci's ratio](http://digital-photography-school.com/divine-composition-with-fibonaccis-ratio-the-rule-of-thirds-on-steroids/) and [Golden ratio](https://en.wikipedia.org/wiki/Golden_ratio)
 
 #### Depth Haze
-This effect is a simple depth-blur which makes far away objects look slightly blurred. It's more subtle than a Depth of Field effect as it's not based on a lens, but on how the human eye sees far away objects outdoors: detail is lost and the farther away an object, e.g. a tower, the less sharp the human eye sees it. Modern render engines tend to render far away objects crisp and sharp which makes the far away objects too sharp to look natural. This effect mimics the 'Depth of field' effect in The Witcher 3. In The Witcher 3, the freecam mod disables this effect however by using 'Depth Haze' you can make far-away objects look properly blurred like in real life again. 
+This effect is a simple depth-blur which makes far away objects look slightly blurred. It's more subtle than a Depth of Field effect as it's not based on a lens, but on how the human eye sees far away objects outdoors: detail is lost and the farther away an object, e.g. a tower, the less sharp the human eye sees it. Modern render engines tend to render far away objects crisp and sharp which makes the far away objects too sharp to look natural. This effect mimics the 'Depth of field' effect in The Witcher 3. In The Witcher 3, the freecam mod disables this effect however by using 'Depth Haze' you can make far-away objects look properly blurred like in real life again.
+
+Additionally Depth Haze also includes fog based on depth and screen position, which is configurable through parameters. It currently fogs more around the middle line of the screen and gradiently lowers the fog intensity towards the top/bottom of the screen, to avoid fog on the sky.   
 
