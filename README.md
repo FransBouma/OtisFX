@@ -1,59 +1,49 @@
 # OtisFX
 A small set of effects for [Reshade](http://reshade.me). 
 
-It's been merged into the [official reshade shader library](https://github.com/crosire/reshade-shaders), but as that library
-is for Reshade 2.0+, the shaders are kept here as well for Reshade 1.x. 
+Most of these shaders are in the [official reshade shader library](https://github.com/crosire/reshade-shaders), in some form/version but that library is tied to a 
+given version of reshade and modified to use controls which are less precise or not compatible with e.g. v3. So I forked my shaders and shaders from others 
+not in the reshade repo I use myself to this repository. 
 
 ### Prerequisites
-You should have [Reshade](http://reshade.me) v1.0 or higher.
-After that please rename the .fx files in 'OtisFX' to .h files, so e.g. `depthhaze.fx` should be renamed to `depthhaze.h`.
+You should have [Reshade](http://reshade.me) v3.4.x or higher and at least reshade.fxh present in the `reshade-shaders\shaders` folder
 
 ### How to install
-Download the zip using the button on the right which says 'Download ZIP'. This will give you a file called 'Master.zip', which contains all code. Unpack the zip and go to the `src` folder. Copy all files and folders inside the `src` folder into the `Reshade` folder in your game's bin folder. This `Reshade` folder should already be there and it already should have a bunch of .cfg files, like `Pipeline.cfg`. If you're using the Reshade Mediator tool, you should copy the contents of the `src` folder to the local source folder of your profile in Mediator. 
+Download the zip using the button on the right which says 'Download ZIP'. This will give you a file called 'Master.zip', which contains all code. 
+Unpack the zip and go to the `src` folder. Copy all files and folders inside the `src` folder into the `Reshade` folder in your game's bin folder. 
+This `Reshade` folder should already be there. If you downloaded all files from the reshade shader repository when you installed reshade, it might be you get the 
+warning from Windows that you're about to overwrite some files. That's ok, just overwrite the ones in the repository with the ones here.
 
-Once the files are in place, open `Pipeline.cfg` in a text editor, e.g. Notepad++, and add the line:
-``` java
-#include EFFECT(OtisFX, Util)
-```
-
-near the top of the file, with the other lines with `Util`. 
-
-Below the line `#include EFFECT(McFX, SSAO)` add
-``` java
-#include EFFECT(OtisFX, DepthHaze)
-```
-
-At the bottom, add:
-``` java
-#include EFFECT(OtisFX, Emphasize)
-#include EFFECT(OtisFX, GoldenRatio)
-```
-
-This makes sure the effect code is embedded in the [Reshade](http://reshade.me) pipeline.
-
-### Configuring and enabling effects
-By default all effects are enabled in code, but not activated. You should configure the keybindings to your liking, I've added keybindings which work for me, but it might be they conflict with e.g. your game's keybindings for save/load. To enable the effects and configure the parameters used in the effects, open the file `OtisFX.cfg` in a text editor, e.g. Notepad++. 
-
-To enable an effect, change the `0` value for a USE_*effectname* define to `1`. Change any other values you might want to configure as well and save the file. [Reshade](http://reshade.me) should now compile the shaders when you run your game again and the effect should be compiled into the shaders. To activate the effect, you have to press the hotkey, see the list below. 
-
-#### Enabling in-game
-To enable the effects in-game, press the assigned hotkey of the effect. These are described below.
-
- * Emphasize: F8
- * GoldenRatio: F6
- * Depth Haze: F4
- 
 ### Effects included
 The following effects are currently included: 
 
-#### Emphasize
-Emphasize is an effect which allows you to make a part of the scene pop out more while other parts are de-emphasized. This is done by using the depth buffer of the 3D engine, and by default it desaturates the areas which are not 'in focus'. Additionally you can specify a blend color which allows you to e.g. make what's not important much darker so the not-in-focus parts of the scene are way darker than the area which should be emphasized which is left as-is. 
+#### Cinematic DOF
+The state of the art depth of field effect I wrote which has all the features you want and need from a depth of field effect: near plane bleed, configurable highlights, 
+high performance, easy to use focusing code and great bokeh. 
 
-#### GoldenRatio
-This effect is rather simple, but can be a great help for taking screenshots with proper composition. It displays 4 so called 'golden ratio' fibonacci spirals on the screen, blended on top of the actual scene. You can then position your camera and zoom level to meet the lines on screen to have everything aligned according to the 'golden ratio'. For more information about the golden ratio and how it's used in photography, see e.g. [Composition with Fibonacci's ratio](http://digital-photography-school.com/divine-composition-with-fibonaccis-ratio-the-rule-of-thirds-on-steroids/) and [Golden ratio](https://en.wikipedia.org/wiki/Golden_ratio)
+#### Emphasize
+Emphasize is an effect which allows you to make a part of the scene pop out more while other parts are de-emphasized. This is done by using the 
+depth buffer of the 3D engine, and by default it desaturates the areas which are not 'in focus'. Additionally you can specify a blend color which 
+allows you to e.g. make what's not important much darker so the not-in-focus parts of the scene are way darker than the area which should be 
+emphasized which is left as-is. 
+
+#### PandaFX
+This effect is written by Jukka Korhonen aka Loadus. I fixed a set of bugs and optimized the code and kept the source here. For details
+[see this thread](https://reshade.me/forum/shader-presentation/4727-cinematic-effects-for-reshade).
 
 #### Depth Haze
-This effect is a simple depth-blur which makes far away objects look slightly blurred. It's more subtle than a Depth of Field effect as it's not based on a lens, but on how the human eye sees far away objects outdoors: detail is lost and the farther away an object, e.g. a tower, the less sharp the human eye sees it. Modern render engines tend to render far away objects crisp and sharp which makes the far away objects too sharp to look natural. This effect mimics the 'Depth of field' effect in The Witcher 3. In The Witcher 3, the freecam mod disables this effect however by using 'Depth Haze' you can make far-away objects look properly blurred like in real life again.
+This effect is a simple depth-blur which makes far away objects look slightly blurred. It's more subtle than a Depth of Field effect as it's not based on a lens, 
+but on how the human eye sees far away objects outdoors: detail is lost and the farther away an object, e.g. a tower, the less sharp the human eye sees it. 
+Modern render engines tend to render far away objects crisp and sharp which makes the far away objects too sharp to look natural. 
+Additionally Depth Haze also includes fog based on depth and screen position, which is configurable through parameters. It currently fogs more around the middle 
+line of the screen and gradiently lowers the fog intensity towards the top/bottom of the screen, to avoid fog on the sky.   
 
-Additionally Depth Haze also includes fog based on depth and screen position, which is configurable through parameters. It currently fogs more around the middle line of the screen and gradiently lowers the fog intensity towards the top/bottom of the screen, to avoid fog on the sky.   
+#### Multi LUT
+A LUT (Look Up Tables for color toning) shader which offers multiple LUTs in one shader to easily change the color toning in-game. The color toning options available
+are based on hand-tuned LUTs and also presets from Adobe Lightroom.
+
+#### Adaptive Fog
+This shader combines bloom with depth fog to add more atmosphere to a scene. It offers a color option to make sure the fog matches the color tone used by the game engine.
+
+
 

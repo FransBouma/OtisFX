@@ -17,7 +17,7 @@
 	#define fLUT_TileAmount 32
 #endif
 #ifndef fLUT_LutAmount
-	#define fLUT_LutAmount 12
+	#define fLUT_LutAmount 18
 #endif
 
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -26,8 +26,8 @@
 
 uniform int fLUT_LutSelector < 
 	ui_type = "combo";
-	ui_min= 0; ui_max=11;
-	ui_items="Neutral\0Color1\0Color2\0Color3 (Blue oriented)\0Color4 (Hollywood)\0Color5\0Color6\0Color7\0Color8\0Sepia\0\B&W mid constrast\0\B&W high contrast\0";
+	ui_min= 0; ui_max=16;
+	ui_items="Neutral\0Color1\0Color2\0Color3 (Blue oriented)\0Color4 (Hollywood)\0Color5\0Color6\0Color7\0Color8\0Cool light\0Flat & green\0Red lift matte\0Cross process\0Azure Red Dual Tone\0Vogue\0Sepia\0\B&W mid constrast\0\B&W high contrast\0";
 	ui_label = "The LUT to use";
 	ui_tooltip = "The LUT to use for color transformation. 'Neutral' doesn't do any color transformation.";
 > = 0;
@@ -51,8 +51,8 @@ uniform float fLUT_AmountLuma <
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 #include "ReShade.fxh"
-texture texLUT < source = fLUT_TextureName; > { Width = fLUT_TileSizeXY*fLUT_TileAmount; Height = fLUT_TileSizeXY * fLUT_LutAmount; Format = RGBA8; };
-sampler	SamplerLUT 	{ Texture = texLUT; };
+texture texMultiLUT < source = fLUT_TextureName; > { Width = fLUT_TileSizeXY*fLUT_TileAmount; Height = fLUT_TileSizeXY * fLUT_LutAmount; Format = RGBA8; };
+sampler	SamplerMultiLUT { Texture = texMultiLUT; };
 
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 //
@@ -70,7 +70,7 @@ void PS_MultiLUT_Apply(float4 vpos : SV_Position, float2 texcoord : TEXCOORD, ou
 	float lerpfact = frac(lutcoord.z);
 	lutcoord.x += (lutcoord.z-lerpfact)*texelsize.y;
 
-	float3 lutcolor = lerp(tex2D(SamplerLUT, lutcoord.xy).xyz, tex2D(SamplerLUT, float2(lutcoord.x+texelsize.y,lutcoord.y)).xyz,lerpfact);
+	float3 lutcolor = lerp(tex2D(SamplerMultiLUT, lutcoord.xy).xyz, tex2D(SamplerMultiLUT, float2(lutcoord.x+texelsize.y,lutcoord.y)).xyz,lerpfact);
 
 	color.xyz = lerp(normalize(color.xyz), normalize(lutcolor.xyz), fLUT_AmountChroma) * 
 	            lerp(length(color.xyz),    length(lutcolor.xyz),    fLUT_AmountLuma);
