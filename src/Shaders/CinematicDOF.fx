@@ -336,6 +336,7 @@ namespace CinematicDOF
 		float numberOfRings : TEXCOORD1;
 		float farPlaneMaxBlurInPixels : TEXCOORD2;
 		float nearPlaneMaxBlurInPixels : TEXCOORD3;
+		float cocFactorPerPixel : TEXCOORD4;
 	};
 	
 	//////////////////////////////////////////////////
@@ -443,9 +444,9 @@ namespace CinematicDOF
 	// calculate the sample weight based on the values specified. 
 	float CalculateSampleWeight(float absoluteSampleRadius, float ringDistance)
 	{
-		float radiusToUse = absoluteSampleRadius ==0 ? 1 : absoluteSampleRadius;
+		float radiusToUse = (absoluteSampleRadius ==0 ? 1 : absoluteSampleRadius) * 0.5;
 		return min(rcp(radiusToUse * radiusToUse * PI), rcp(0.5 * 0.5 * PI))
-				* saturate(absoluteSampleRadius - ringDistance)
+				* saturate(radiusToUse - ringDistance) / radiusToUse
 				* saturate(1-ringDistance);
 	}
 	
@@ -545,18 +546,18 @@ namespace CinematicDOF
 		
 		// luma is stored in alpha
 		float threshold = max((fragment.a - HighlightThresholdFarPlane), 0) * HighlightGainFarPlane;
-		float4 average = float4((fragment.rgb + lerp(0, fragment.rgb, threshold * fragmentRadius * 0.01)) * saturate(1-HighlightEdgeBias), saturate(1.0-HighlightEdgeBias));
+		float4 average = float4((fragment.rgb + lerp(0, fragment.rgb, threshold * fragmentRadius)) * saturate(1.0-HighlightEdgeBias), saturate(1.0-HighlightEdgeBias));
 		float2 pointOffset = float2(0,0);
-		float2 ringRadiusDeltaCoords = (ReShade::PixelSize * lerp(0.0, blurInfo.farPlaneMaxBlurInPixels, fragmentRadius)) / ((blurInfo.numberOfRings-1) + (blurInfo.numberOfRings==0));
+		float2 ringRadiusDeltaCoords =  (ReShade::PixelSize * lerp(0.0, blurInfo.farPlaneMaxBlurInPixels, fragmentRadius)) / ((blurInfo.numberOfRings-1) + (blurInfo.numberOfRings==0));
 		float2 currentRingRadiusCoords = ringRadiusDeltaCoords;
-		float cocPerRing = fragmentRadius / blurInfo.numberOfRings;
+		float cocPerRing = length(currentRingRadiusCoords);
 		float pointsOnRing = pointsFirstRing;
 		float maxLuma = saturate((fragment.a * fragmentRadius)-HighlightThresholdFarPlane);
 		for(float ringIndex = 0; ringIndex < blurInfo.numberOfRings; ringIndex++)
 		{
 			float anglePerPoint = 6.28318530717958 / pointsOnRing;
 			float angle = anglePerPoint;
-			float ringWeight = lerp(1, ringIndex/blurInfo.numberOfRings, HighlightEdgeBias);
+			float ringWeight = lerp(0.5, ringIndex/blurInfo.numberOfRings, HighlightEdgeBias);
 			float ringDistance = (cocPerRing * ringIndex * 0.5);
 			for(float pointNumber = 0; pointNumber < pointsOnRing; pointNumber++)
 			{
@@ -565,7 +566,7 @@ namespace CinematicDOF
 				float sampleRadius = tex2Dlod(SamplerCDCoC, tapCoords).r;
 				float4 tap = tex2Dlod(source, tapCoords);
 				float absoluteSampleRadius = abs(sampleRadius);
-				float weight =  (sampleRadius >=0) * ringWeight * CalculateSampleWeight(absoluteSampleRadius, ringDistance);
+				float weight = (sampleRadius >=0) * ringWeight * CalculateSampleWeight(blurInfo.cocFactorPerPixel * absoluteSampleRadius, ringDistance);
 				// luma is stored in alpha.
 				threshold = max((tap.a - HighlightThresholdFarPlane), 0) * HighlightGainFarPlane;
 				float3 weightedTap = (tap.rgb + lerp(0, tap.rgb, threshold * absoluteSampleRadius));
@@ -787,6 +788,7 @@ namespace CinematicDOF
 		float pixelSizeLength = length(ReShade::PixelSize);
 		blurInfo.farPlaneMaxBlurInPixels = (FarPlaneMaxBlur / 100.0) / pixelSizeLength;
 		blurInfo.nearPlaneMaxBlurInPixels = (NearPlaneMaxBlur / 100.0) / pixelSizeLength;
+		blurInfo.cocFactorPerPixel = length(ReShade::PixelSize) * blurInfo.farPlaneMaxBlurInPixels;	// not needed for near plane.
 		return blurInfo;
 	}
 
