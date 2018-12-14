@@ -32,6 +32,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // Version history:
+// 14-dec-2018:		v1.1.4: Far plane weight calculation tweaked a bit as near-focus plane elements could lead to hard edges which looked ugly.
 // 10-dec-2018:		v1.1.3: Removed averaging pass for CoC values as it resulted in noticeable wrong CoC values around edges in some TAA using games. The net result
 //							was minimal anyway. 
 // 10-nov-2018:		v1.1.2: Near plane bugfix: tile gatherer should collect min CoC, not average of min CoC: now ends of narrow lines are properly handled too.
@@ -440,12 +441,12 @@ namespace CinematicDOF
 	}
 	
 	// calculate the sample weight based on the values specified. 
-	float CalculateSampleWeight(float absoluteSampleRadius, float signedSampleRadius, float fragmentRadius, float ringDistance)
+	float CalculateSampleWeight(float absoluteSampleRadius, float ringDistance)
 	{
 		float radiusToUse = absoluteSampleRadius ==0 ? 1 : absoluteSampleRadius;
-		return min(rcp(radiusToUse * radiusToUse * PI), rcp(0.5 * 0.5 * PI)) 
-				* saturate(1 - abs(fragmentRadius - signedSampleRadius))
-				*saturate(absoluteSampleRadius - ringDistance);
+		return min(rcp(radiusToUse * radiusToUse * PI), rcp(0.5 * 0.5 * PI))
+				* saturate(absoluteSampleRadius - ringDistance)
+				* saturate(1-ringDistance);
 	}
 	
 	// Same as PerformDiscBlur but this time for the near plane. It's in a separate function to avoid a lot of if/switch statements as
@@ -564,7 +565,7 @@ namespace CinematicDOF
 				float sampleRadius = tex2Dlod(SamplerCDCoC, tapCoords).r;
 				float4 tap = tex2Dlod(source, tapCoords);
 				float absoluteSampleRadius = abs(sampleRadius);
-				float weight =  (sampleRadius >=0) * ringWeight * CalculateSampleWeight(absoluteSampleRadius, sampleRadius, fragmentRadius, ringDistance);
+				float weight =  (sampleRadius >=0) * ringWeight * CalculateSampleWeight(absoluteSampleRadius, ringDistance);
 				// luma is stored in alpha.
 				threshold = max((tap.a - HighlightThresholdFarPlane), 0) * HighlightGainFarPlane;
 				float3 weightedTap = (tap.rgb + lerp(0, tap.rgb, threshold * absoluteSampleRadius));
