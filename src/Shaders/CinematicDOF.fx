@@ -546,8 +546,8 @@ namespace CinematicDOF
 		}
 		
 		// luma is stored in alpha
-		float pixelLuma = max(fragment.a, 0) * HighlightGainFarPlane;
-		float4 average = float4((fragment.rgb + lerp(0, fragment.rgb, pixelLuma * fragmentRadius)) * saturate(1.0-HighlightEdgeBias), saturate(1.0-HighlightEdgeBias));
+		float pixelLumaGain = max(fragment.a, 0) * HighlightGainFarPlane;
+		float4 average = float4((fragment.rgb + lerp(0, fragment.rgb, pixelLumaGain * fragmentRadius)) * saturate(1.0-HighlightEdgeBias), saturate(1.0-HighlightEdgeBias));
 		float2 pointOffset = float2(0,0);
 		float2 ringRadiusDeltaCoords =  (ReShade::PixelSize * lerp(0.0, blurInfo.farPlaneMaxBlurInPixels, fragmentRadius)) / ((blurInfo.numberOfRings-1) + (blurInfo.numberOfRings==0));
 		float2 currentRingRadiusCoords = ringRadiusDeltaCoords;
@@ -569,12 +569,10 @@ namespace CinematicDOF
 				float absoluteSampleRadius = abs(sampleRadius);
 				float weight = (sampleRadius >=0) * ringWeight * CalculateSampleWeight(blurInfo.cocFactorPerPixel * absoluteSampleRadius, ringDistance);
 				// luma is stored in alpha.
-				pixelLuma = max(tap.a, 0) * HighlightGainFarPlane;
-				float3 weightedTap = (tap.rgb + lerp(0, tap.rgb, pixelLuma * absoluteSampleRadius));
+				float3 weightedTap = (tap.rgb + lerp(0, tap.rgb, max(tap.a, 0) * HighlightGainFarPlane * absoluteSampleRadius));
 				average.rgb += weightedTap * weight;
 				average.w += weight;
-				float sampleLuma = saturate(dot(weightedTap.rgb, lumaDotWeight) * sampleRadius);
-				maxLuma = max(maxLuma, sampleLuma-HighlightThresholdFarPlane);
+				maxLuma = max(maxLuma, saturate(dot(weightedTap.rgb, lumaDotWeight) * sampleRadius)-HighlightThresholdFarPlane);
 				angle+=anglePerPoint;
 			}
 			pointsOnRing+=pointsFirstRing;
