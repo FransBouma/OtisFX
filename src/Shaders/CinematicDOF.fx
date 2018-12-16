@@ -32,7 +32,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // Version history:
-// 14-dec-2018:		v1.1.4: Far plane weight calculation tweaked a bit as near-focus plane elements could lead to hard edges which looked ugly.
+// 14-dec-2018:		v1.1.4: Far plane weight calculation tweaked a bit as near-focus plane elements could lead to hard edges which looked ugly. Highlight far plane
+//							adjustments have been reworked because of this. 
 // 10-dec-2018:		v1.1.3: Removed averaging pass for CoC values as it resulted in noticeable wrong CoC values around edges in some TAA using games. The net result
 //							was minimal anyway. 
 // 10-nov-2018:		v1.1.2: Near plane bugfix: tile gatherer should collect min CoC, not average of min CoC: now ends of narrow lines are properly handled too.
@@ -545,12 +546,12 @@ namespace CinematicDOF
 		}
 		
 		// luma is stored in alpha
-		float threshold = max((fragment.a - HighlightThresholdFarPlane), 0) * HighlightGainFarPlane;
-		float4 average = float4((fragment.rgb + lerp(0, fragment.rgb, threshold * fragmentRadius)) * saturate(1.0-HighlightEdgeBias), saturate(1.0-HighlightEdgeBias));
+		float pixelLuma = max(fragment.a, 0) * HighlightGainFarPlane;
+		float4 average = float4((fragment.rgb + lerp(0, fragment.rgb, pixelLuma * fragmentRadius)) * saturate(1.0-HighlightEdgeBias), saturate(1.0-HighlightEdgeBias));
 		float2 pointOffset = float2(0,0);
 		float2 ringRadiusDeltaCoords =  (ReShade::PixelSize * lerp(0.0, blurInfo.farPlaneMaxBlurInPixels, fragmentRadius)) / ((blurInfo.numberOfRings-1) + (blurInfo.numberOfRings==0));
 		float2 currentRingRadiusCoords = ringRadiusDeltaCoords;
-		float cocPerRing = length(currentRingRadiusCoords);
+		float cocPerRing = length(currentRingRadiusCoords) * 0.5;
 		float pointsOnRing = pointsFirstRing;
 		float maxLuma = saturate((fragment.a * fragmentRadius)-HighlightThresholdFarPlane);
 		for(float ringIndex = 0; ringIndex < blurInfo.numberOfRings; ringIndex++)
@@ -558,7 +559,7 @@ namespace CinematicDOF
 			float anglePerPoint = 6.28318530717958 / pointsOnRing;
 			float angle = anglePerPoint;
 			float ringWeight = lerp(0.5, ringIndex/blurInfo.numberOfRings, HighlightEdgeBias);
-			float ringDistance = (cocPerRing * ringIndex * 0.5);
+			float ringDistance = cocPerRing * ringIndex;
 			for(float pointNumber = 0; pointNumber < pointsOnRing; pointNumber++)
 			{
 				sincos(angle, pointOffset.y, pointOffset.x);
@@ -568,11 +569,12 @@ namespace CinematicDOF
 				float absoluteSampleRadius = abs(sampleRadius);
 				float weight = (sampleRadius >=0) * ringWeight * CalculateSampleWeight(blurInfo.cocFactorPerPixel * absoluteSampleRadius, ringDistance);
 				// luma is stored in alpha.
-				threshold = max((tap.a - HighlightThresholdFarPlane), 0) * HighlightGainFarPlane;
-				float3 weightedTap = (tap.rgb + lerp(0, tap.rgb, threshold * absoluteSampleRadius));
+				pixelLuma = max(tap.a, 0) * HighlightGainFarPlane;
+				float3 weightedTap = (tap.rgb + lerp(0, tap.rgb, pixelLuma * absoluteSampleRadius));
 				average.rgb += weightedTap * weight;
 				average.w += weight;
-				maxLuma = max(maxLuma, (saturate(dot(weightedTap.rgb, lumaDotWeight) * sampleRadius))-HighlightThresholdFarPlane);
+				float sampleLuma = saturate(dot(weightedTap.rgb, lumaDotWeight) * sampleRadius);
+				maxLuma = max(maxLuma, sampleLuma-HighlightThresholdFarPlane);
 				angle+=anglePerPoint;
 			}
 			pointsOnRing+=pointsFirstRing;
@@ -610,10 +612,12 @@ namespace CinematicDOF
 		float pointsOnRing = pointsFirstRing;
 		float2 currentRingRadiusCoords = ringRadiusDeltaCoords;
 		float maxLuma = dot(fragment.rgb, lumaDotWeight) * (absoluteFragmentRadius < 0.01 ? 0 : 1);
+		float cocPerRing = length(currentRingRadiusCoords) * 0.5;
 		for(float ringIndex = 0; ringIndex < numberOfRings; ringIndex++)
 		{
 			float anglePerPoint = 6.28318530717958 / pointsOnRing;
 			float angle = anglePerPoint;
+			float ringDistance = cocPerRing * ringIndex;
 			for(float pointNumber = 0; pointNumber < pointsOnRing; pointNumber++)
 			{
 				sincos(angle, pointOffset.y, pointOffset.x);
@@ -622,10 +626,9 @@ namespace CinematicDOF
 				float absoluteSampleRadius = abs(signedSampleRadius);
 				float isSamePlaneAsFragment = ((signedSampleRadius > 0 && !isNearPlaneFragment) || (signedSampleRadius <= 0 && isNearPlaneFragment));
 				float lumaWeight = absoluteFragmentRadius - absoluteSampleRadius < 0.001;
-				float weight = saturate(1 - abs(absoluteFragmentRadius - absoluteSampleRadius)) * isSamePlaneAsFragment * lumaWeight;
+				float weight = CalculateSampleWeight(blurInfo.cocFactorPerPixel * absoluteSampleRadius, ringDistance) * isSamePlaneAsFragment * lumaWeight;
 				float3 tap = tex2Dlod(source, tapCoords).rgb;
-				maxLuma = max(maxLuma, isSamePlaneAsFragment * dot(tap.rgb, lumaDotWeight) * lumaWeight
-									* (absoluteSampleRadius < 0.2 ? 0 : smoothstep(0, 1, saturate(absoluteSampleRadius-0.2)/0.8)));
+				maxLuma = max(maxLuma, isSamePlaneAsFragment * dot(tap.rgb, lumaDotWeight) * lumaWeight);
 				average.rgb += tap.rgb * weight;
 				average.w += weight;
 				angle+=anglePerPoint;
