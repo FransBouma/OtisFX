@@ -256,6 +256,18 @@ namespace CinematicDOF
 	> = false;
 #if CD_DEBUG
 	// ------------- DEBUG
+	uniform bool DBVal1 <
+		ui_category = "Debugging";
+	> = false;
+	uniform bool DBVal2 <
+		ui_category = "Debugging";
+	> = false;
+	uniform float DBVal3f <
+		ui_category = "Debugging";
+		ui_type = "drag";
+		ui_min = 0.00; ui_max = 1.00;
+		ui_step = 0.01;
+	> = 0.0;
 	uniform bool ShowNearCoCBlur <
 		ui_category = "Debugging";
 		ui_tooltip = "Shows the near coc blur buffer as b&w";
@@ -270,9 +282,6 @@ namespace CinematicDOF
 		ui_category = "Debugging";
 	> = false;
 	uniform bool ShowNearPlaneAlpha <
-		ui_category = "Debugging";
-	> = false;
-	uniform bool DBVal1 <
 		ui_category = "Debugging";
 	> = false;
 #endif
@@ -569,10 +578,10 @@ namespace CinematicDOF
 				float absoluteSampleRadius = abs(sampleRadius);
 				float weight = (sampleRadius >=0) * ringWeight * CalculateSampleWeight(blurInfo.cocFactorPerPixel * absoluteSampleRadius, ringDistance);
 				// luma is stored in alpha.
-				float3 weightedTap = (tap.rgb + lerp(0, tap.rgb, max(tap.a, 0) * HighlightGainFarPlane * absoluteSampleRadius));
-				average.rgb += weightedTap * weight;
+				float3 gainedTap = (tap.rgb + lerp(0, tap.rgb, max(tap.a, 0) * HighlightGainFarPlane * absoluteSampleRadius));
+				average.rgb += gainedTap * weight;
 				average.w += weight;
-				maxLuma = max(maxLuma, saturate(dot(weightedTap.rgb, lumaDotWeight) * sampleRadius)-HighlightThresholdFarPlane);
+				maxLuma = max(maxLuma, saturate(dot(gainedTap.rgb, lumaDotWeight) * sampleRadius )-HighlightThresholdFarPlane);
 				angle+=anglePerPoint;
 			}
 			pointsOnRing+=pointsFirstRing;
@@ -626,8 +635,8 @@ namespace CinematicDOF
 				float lumaWeight = absoluteFragmentRadius - absoluteSampleRadius < 0.001;
 				float weight = CalculateSampleWeight(blurInfo.cocFactorPerPixel * absoluteSampleRadius, ringDistance) * isSamePlaneAsFragment * lumaWeight;
 				float3 tap = tex2Dlod(source, tapCoords).rgb;
-				maxLuma = max(maxLuma, isSamePlaneAsFragment * dot(tap.rgb, lumaDotWeight) * lumaWeight);
-				average.rgb += tap.rgb * weight;
+				maxLuma = max(maxLuma, isSamePlaneAsFragment * dot(tap.rgb, lumaDotWeight) * lumaWeight * (weight > 0.1));
+				average.rgb += tap * weight;
 				average.w += weight;
 				angle+=anglePerPoint;
 			}
