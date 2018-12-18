@@ -205,7 +205,7 @@ namespace CinematicDOF
 		ui_category = "Highlight tweaking";
 		ui_label="Highlight edge bias";
 		ui_type = "drag";
-		ui_min = 0.00; ui_max = 1.5;
+		ui_min = 0.00; ui_max = 1.00;
 		ui_tooltip = "The bias for the highlight: 0 means evenly spread, 1.5 means everything is at the\nedge of the bokeh circle.";
 		ui_step = 0.01;
 	> = 0.0;
@@ -486,20 +486,21 @@ namespace CinematicDOF
 		// use one extra ring as undersampling is really prominent in near-camera objects.
 		float numberOfRings = max(blurInfo.numberOfRings, 1) + 1;
 		float pointsFirstRing = 7;
+		float edgeBiasToUse = saturate(HighlightEdgeBias*0.5);
 		// luma is stored in alpha
 		float threshold = max((fragment.a - HighlightThresholdNearPlane) * HighlightGainNearPlane, 0);
-		float4 average = float4((fragment.rgb + lerp(0, fragment.rgb, threshold * fragmentRadiusToUse * 0.01)) * saturate(1-HighlightEdgeBias), saturate(1.0-HighlightEdgeBias));
+		float4 average = float4((fragment.rgb + lerp(0, fragment.rgb, threshold * fragmentRadiusToUse * 0.01)) * (1-edgeBiasToUse), (1.0-edgeBiasToUse));
 		float2 pointOffset = float2(0,0);
 		float2 ringRadiusDeltaCoords = ReShade::PixelSize * lerp(0.0, blurInfo.nearPlaneMaxBlurInPixels, fragmentRadiusToUse) / (numberOfRings-1);
 		float pointsOnRing = pointsFirstRing;
 		float2 currentRingRadiusCoords = ringRadiusDeltaCoords;
-		float maxLuma = saturate((dot(fragment.rgb, lumaDotWeight) * fragmentRadii.g)-HighlightThresholdNearPlane);
+		float maxLuma = saturate((dot(fragment.rgb, lumaDotWeight) * fragmentRadii.g)-HighlightThresholdNearPlane) * (1.0-edgeBiasToUse);
 		for(float ringIndex = 0; ringIndex < numberOfRings; ringIndex++)
 		{
 			float anglePerPoint = 6.28318530717958 / pointsOnRing;
 			float angle = anglePerPoint;
 			// no further weight needed, bleed all you want. 
-			float weight = lerp(1, ringIndex/numberOfRings, HighlightEdgeBias);
+			float weight = lerp(ringIndex/blurInfo.numberOfRings, 1, smoothstep(0, 1, (1-edgeBiasToUse)));
 			for(float pointNumber = 0; pointNumber < pointsOnRing; pointNumber++)
 			{
 				sincos(angle, pointOffset.y, pointOffset.x);
@@ -512,7 +513,7 @@ namespace CinematicDOF
 				float3 weightedTap = (tap.rgb + lerp(0, tap.rgb, threshold * abs(sampleRadii.r)));
 				average.rgb += weightedTap * weight;
 				average.w += weight;
-				maxLuma = max(maxLuma, saturate(dot(weightedTap.rgb, lumaDotWeight))-HighlightThresholdNearPlane);
+				maxLuma = max(maxLuma, saturate((dot(weightedTap.rgb, lumaDotWeight)-HighlightThresholdNearPlane) * weight));
 				angle+=anglePerPoint;
 			}
 			pointsOnRing+=pointsFirstRing;
@@ -558,16 +559,16 @@ namespace CinematicDOF
 		float pixelLumaGain = max(fragment.a, 0) * HighlightGainFarPlane;
 		float4 average = float4((fragment.rgb + lerp(0, fragment.rgb, pixelLumaGain * fragmentRadius)) * saturate(1.0-HighlightEdgeBias), saturate(1.0-HighlightEdgeBias));
 		float2 pointOffset = float2(0,0);
-		float2 ringRadiusDeltaCoords =  (ReShade::PixelSize * lerp(0.0, blurInfo.farPlaneMaxBlurInPixels, fragmentRadius)) / ((blurInfo.numberOfRings-1) + (blurInfo.numberOfRings==0));
+		float2 ringRadiusDeltaCoords =  (ReShade::PixelSize * lerp(0.0, blurInfo.farPlaneMaxBlurInPixels, fragmentRadius)) / (blurInfo.numberOfRings-1);
 		float2 currentRingRadiusCoords = ringRadiusDeltaCoords;
 		float cocPerRing = length(currentRingRadiusCoords) * 0.5;
 		float pointsOnRing = pointsFirstRing;
-		float maxLuma = saturate((fragment.a * fragmentRadius)-HighlightThresholdFarPlane);
+		float maxLuma = saturate((fragment.a * fragmentRadius)-HighlightThresholdFarPlane) * saturate(1.0-HighlightEdgeBias);
 		for(float ringIndex = 0; ringIndex < blurInfo.numberOfRings; ringIndex++)
 		{
 			float anglePerPoint = 6.28318530717958 / pointsOnRing;
 			float angle = anglePerPoint;
-			float ringWeight = lerp(0.5, ringIndex/blurInfo.numberOfRings, HighlightEdgeBias);
+			float ringWeight = lerp(ringIndex/blurInfo.numberOfRings, 1, smoothstep(0, 1, saturate(1-HighlightEdgeBias)));
 			float ringDistance = cocPerRing * ringIndex;
 			for(float pointNumber = 0; pointNumber < pointsOnRing; pointNumber++)
 			{
@@ -581,7 +582,7 @@ namespace CinematicDOF
 				float3 gainedTap = (tap.rgb + lerp(0, tap.rgb, max(tap.a, 0) * HighlightGainFarPlane * absoluteSampleRadius));
 				average.rgb += gainedTap * weight;
 				average.w += weight;
-				maxLuma = max(maxLuma, saturate(dot(gainedTap.rgb, lumaDotWeight) * sampleRadius )-HighlightThresholdFarPlane);
+				maxLuma = max(maxLuma, saturate((dot(gainedTap.rgb, lumaDotWeight) * sampleRadius )-HighlightThresholdFarPlane) * ringWeight);
 				angle+=anglePerPoint;
 			}
 			pointsOnRing+=pointsFirstRing;
