@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
-// Cinematic Depth of Field shader, using scatter-as-gather for ReShade 3.x. 
+// Cinematic Depth of Field shader, using scatter-as-gather for ReShade 3.x+
 // By Frans Bouma, aka Otis / Infuse Project (Otis_Inf)
 // https://fransbouma.com 
 //
@@ -32,6 +32,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // Version history:
+// 19-dec-2018:		v1.1.5: Added far plane highlight normalizing for non-gained highlights. Added tooltip for reshade v4.x
 // 14-dec-2018:		v1.1.4: Far plane weight calculation tweaked a bit as near-focus plane elements could lead to hard edges which looked ugly. Highlight far plane
 //							adjustments have been reworked because of this. 
 // 10-dec-2018:		v1.1.3: Removed averaging pass for CoC values as it resulted in noticeable wrong CoC values around edges in some TAA using games. The net result
@@ -232,6 +233,14 @@ namespace CinematicDOF
 		ui_tooltip = "The threshold for the source pixels. Pixels with a luminosity above this threshold\nwill be highlighted. Raise this value to only keep the highlights you want.\nWhen highlight type is Twinkle circlets, set the threshold at 0.5 or higher\nfor blur without highlights.";
 		ui_step = 0.01;
 	> = 0.5;
+	uniform float HighlightNormalizingFactor <
+		ui_category = "Highlight tweaking, far plane";
+		ui_label="Highlight normalizing factor";
+		ui_type = "drag";
+		ui_min = 0.00; ui_max = 1.00;
+		ui_tooltip = "(Advanced feature). When Twinkle circlets is used for highlights, this factor is\nused to determine the color of highlight circlets.";
+		ui_step = 0.01;
+	> = 0.00;
 	uniform float HighlightGainNearPlane <
 		ui_category = "Highlight tweaking, near plane";
 		ui_label = "Highlight gain";
@@ -564,6 +573,7 @@ namespace CinematicDOF
 		float cocPerRing = length(currentRingRadiusCoords) * 0.5;
 		float pointsOnRing = pointsFirstRing;
 		float maxLuma = saturate((fragment.a * fragmentRadius)-HighlightThresholdFarPlane) * saturate(1.0-HighlightEdgeBias);
+		float3 maxColor = average.rgb;
 		for(float ringIndex = 0; ringIndex < blurInfo.numberOfRings; ringIndex++)
 		{
 			float anglePerPoint = 6.28318530717958 / pointsOnRing;
@@ -582,15 +592,20 @@ namespace CinematicDOF
 				float3 gainedTap = (tap.rgb + lerp(0, tap.rgb, max(tap.a, 0) * HighlightGainFarPlane * absoluteSampleRadius));
 				average.rgb += gainedTap * weight;
 				average.w += weight;
-				maxLuma = max(maxLuma, saturate((dot(gainedTap.rgb, lumaDotWeight) * sampleRadius )-HighlightThresholdFarPlane) * ringWeight);
+				float lumaSample = saturate((dot(gainedTap.rgb, lumaDotWeight) * sampleRadius )-HighlightThresholdFarPlane) * ringWeight;
+				maxColor = max(maxColor, gainedTap.rgb * (maxLuma < lumaSample));
+				maxLuma = max(maxLuma, lumaSample);
 				angle+=anglePerPoint;
 			}
 			pointsOnRing+=pointsFirstRing;
 			currentRingRadiusCoords += ringRadiusDeltaCoords;
 		}
 		fragment.rgb = average.rgb / (average.w + (average.w==0));
+		float newFragmentLuma = dot(fragment.rgb, lumaDotWeight);
+		fragment.rgb = lerp(fragment.rgb, maxColor, min(saturate(maxLuma-newFragmentLuma), HighlightNormalizingFactor));
+		newFragmentLuma = dot(fragment.rgb, lumaDotWeight);
 		// increase luma to the max luma found, if setting is enabled.
-		fragment.rgb *= 1+saturate(maxLuma-dot(fragment.rgb, lumaDotWeight)) * HighlightType;
+		fragment.rgb *= 1+saturate(maxLuma-newFragmentLuma) * HighlightType;
 		return fragment;
 	}
 	
@@ -706,15 +721,17 @@ namespace CinematicDOF
 	{
 		float offset[6] = { 0.0, 1.4584295168, 3.40398480678, 5.3518057801, 7.302940716, 9.2581597095 };
 		float weight[6] = { 0.13298, 0.23227575, 0.1353261595, 0.0511557427, 0.01253922, 0.0019913644 };
+		const float3 lumaDotWeight = float3(0.3, 0.59, 0.11);
 		
 		float coc = tex2Dlod(SamplerCDCoC, float4(texcoord, 0, 0)).r;
 		float4 fragment = tex2Dlod(source, float4(texcoord, 0, 0));
+		float fragmentLuma = dot(fragment.rgb, lumaDotWeight);
 		float4 originalFragment = fragment;
 		float absoluteCoC = abs(coc);
 		float lengthPixelSize = length(ReShade::PixelSize);
-		if(absoluteCoC < 0.2)
+		if(absoluteCoC < 0.2 || PostBlurSmoothing < 0.01 || fragmentLuma < 0.3)
 		{
-			// in focus, ignore
+			// in focus or postblur smoothing isn't enabled or not really a highlight, ignore
 			return fragment;
 		}
 		fragment.rgb *= weight[0];
@@ -920,7 +937,7 @@ namespace CinematicDOF
 			fragment = GetDebugFragment(tex2D(SamplerCDCoC, focusInfo.texcoord).r, true);
 			return;
 		}
-#if CD_DEBUG	
+#if CD_DEBUG
 		if(ShowNearCoCBlur)
 		{
 			fragment = GetDebugFragment(tex2D(SamplerCDCoCBlurred, focusInfo.texcoord).r, false);
@@ -976,7 +993,6 @@ namespace CinematicDOF
 		}
 	}
 
-
 	//////////////////////////////////////////////////
 	//
 	// Techniques
@@ -984,6 +1000,15 @@ namespace CinematicDOF
 	//////////////////////////////////////////////////
 
 	technique CinematicDOF
+#if __RESHADE__ >= 40000
+	< ui_tooltip = "Cinematic Depth of Field\n"
+			"========================\n\n"
+			"Cinematic Depth of Field is a state of the art depth of field shader, offering fine-grained control over focusing,\n"
+			"blur aspects and highlights, using real-life lens aspects. Cinematic Depth of Field is based on various papers,\n"
+			"the references are included in the source code.\n\n"
+			"Cinematic Depth of Field was written by Frans Bouma, aka Otis / Infuse Project (Otis_Inf) and is part of OtisFX\n"
+			"https://fransbouma.com | https://github.com/FransBouma/OtisFX"; >
+#endif
 	{
 		pass DetermineCurrentFocus { VertexShader = PostProcessVS; PixelShader = PS_DetermineCurrentFocus; RenderTarget = texCDCurrentFocus; }
 		pass CopyCurrentFocus { VertexShader = PostProcessVS; PixelShader = PS_CopyCurrentFocus; RenderTarget = texCDPreviousFocus; }
@@ -998,6 +1023,6 @@ namespace CinematicDOF
 		pass NearBokehBlur { VertexShader = VS_DiscBlur; PixelShader = PS_NearBokehBlur; RenderTarget = texCDBuffer1; }
 		pass Combiner { VertexShader = PostProcessVS; PixelShader = PS_Combiner; RenderTarget = texCDBuffer3; }
 		pass PostSmoothing1 { VertexShader = PostProcessVS; PixelShader = PS_PostSmoothing1; RenderTarget = texCDBuffer4; }
-		pass PostSmoothing2AndFocusing { VertexShader = VS_Focus; PixelShader = PS_PostSmoothing2AndFocusing; }
+		pass PostSmoothing2AndFocusing { VertexShader = VS_Focus; PixelShader = PS_PostSmoothing2AndFocusing;}
 	}
 }
