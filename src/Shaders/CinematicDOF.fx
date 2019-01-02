@@ -6,7 +6,7 @@
 //
 // This shader has been released under the following license:
 //
-// Copyright (c) 2018 Frans Bouma
+// Copyright (c) 2018-2019 Frans Bouma
 // All rights reserved.
 // 
 // Redistribution and use in source and binary forms, with or without
@@ -32,6 +32,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // Version history:
+// 02-jan-2019:		v1.1.6: When near plane max blur is set to 0, the original fragment is now used in the near plane instead of the half-res pixel. 
 // 19-dec-2018:		v1.1.5: Added far plane highlight normalizing for non-gained highlights. Added tooltip for reshade v4.x
 // 14-dec-2018:		v1.1.4: Far plane weight calculation tweaked a bit as near-focus plane elements could lead to hard edges which looked ugly. Highlight far plane
 //							adjustments have been reworked because of this. 
@@ -916,7 +917,7 @@ namespace CinematicDOF
 		// 'magic' number to boost up the alpha.
 		float blendFactor = (realCoC > 0.1) ? 1 : smoothstep(0, 1, (realCoC / 0.1));
 		fragment = lerp(originalFragment, farFragment, blendFactor);
-		fragment.rgb = lerp(fragment.rgb, nearFragment.rgb, nearFragment.a);
+		fragment.rgb = lerp(fragment.rgb, nearFragment.rgb, nearFragment.a * (NearPlaneMaxBlur != 0));
 		fragment.a = 1.0;
 	}
 	
