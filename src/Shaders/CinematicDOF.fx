@@ -32,6 +32,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // Version history:
+// 08-jan-2019:		v1.1.7: Added 9-tap tent filter as described in [Jimenez2014) for mitigating undersampling. Implementation is from KinoBokeh (see credits below).
 // 02-jan-2019:		v1.1.6: When near plane max blur is set to 0, the original fragment is now used in the near plane instead of the half-res pixel. 
 // 19-dec-2018:		v1.1.5: Added far plane highlight normalizing for non-gained highlights. Added tooltip for reshade v4.x
 // 14-dec-2018:		v1.1.4: Far plane weight calculation tweaked a bit as near-focus plane elements could lead to hard edges which looked ugly. Highlight far plane
@@ -59,6 +60,8 @@
 // Additional credits:
 // Gaussian blur code based on the Gaussian blur ReShade shader by Ioxa
 // Thanks to Daodan for the crosshair code in the focus helper.
+// 9 tap tent filter is from KinoBokeh Copyright (C) 2015 Keijiro Takahashi. MIT licensed. See file below for details.
+//       Ref:  https://github.com/keijiro/KinoBokeh/blob/master/Assets/Kino/Bokeh/Shader/Composition.cginc
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // References:
 //
@@ -317,8 +320,9 @@ namespace CinematicDOF
 	texture texCDCoCBlurred			{ Width = BUFFER_WIDTH/2; Height = BUFFER_HEIGHT/2; Format = RG16F; };	// half res, blurred CoC (r) and real CoC (g)
 	texture texCDBuffer1 			{ Width = BUFFER_WIDTH/2; Height = BUFFER_HEIGHT/2; Format = RGBA8; };
 	texture texCDBuffer2 			{ Width = BUFFER_WIDTH/2; Height = BUFFER_HEIGHT/2; Format = RGBA8; }; 
-	texture texCDBuffer3 			{ Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; Format = RGBA8; }; 	// Full res upscale buffer
-	texture texCDBuffer4 			{ Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; Format = RGBA8; }; 	// Full res upscale buffer. We need 2 as post smooth needs 2
+	texture texCDBuffer3 			{ Width = BUFFER_WIDTH/2; Height = BUFFER_HEIGHT/2; Format = RGBA8; }; // needed for tentfilter as far/near have to be preserved in buffer 1 and 2
+	texture texCDBuffer4 			{ Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; Format = RGBA8; }; 	// Full res upscale buffer
+	texture texCDBuffer5 			{ Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; Format = RGBA8; }; 	// Full res upscale buffer. We need 2 as post smooth needs 2
 
 	sampler	SamplerCDCurrentFocus		{ Texture = texCDCurrentFocus; };
 	sampler SamplerCDPreviousFocus		{ Texture = texCDPreviousFocus; };
@@ -326,6 +330,7 @@ namespace CinematicDOF
 	sampler SamplerCDBuffer2 			{ Texture = texCDBuffer2; };
 	sampler SamplerCDBuffer3 			{ Texture = texCDBuffer3; };
 	sampler SamplerCDBuffer4 			{ Texture = texCDBuffer4; };
+	sampler SamplerCDBuffer5 			{ Texture = texCDBuffer5; };
 	sampler SamplerCDCoC				{ Texture = texCDCoC; MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
 	sampler SamplerCDCoCTmp1			{ Texture = texCDCoCTmp1; MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
 	sampler SamplerCDCoCBlurred			{ Texture = texCDCoCBlurred; MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
@@ -904,12 +909,12 @@ namespace CinematicDOF
 											float2(0.0, ReShade::PixelSize.y * (ReShade::ScreenSize.y/GROUND_TRUTH_SCREEN_HEIGHT)), false), tex2D(SamplerCDCoC, texcoord).x);
 	}
 	
-	// pixel shader which combines 2 half-res sources to a full res output. From texCDBuffer1 & 2 to texCDBuffer3.
+	// Pixel shader which combines 2 half-res sources to a full res output. From texCDBuffer1 & 2 to texCDBuffer4.
 	void PS_Combiner(float4 vpos : SV_Position, float2 texcoord : TEXCOORD, out float4 fragment : SV_Target0)
 	{
 		// first blend far plane with original buffer, then near plane on top of that. 
 		float4 originalFragment = tex2D(ReShade::BackBuffer, texcoord);
-		float4 farFragment = tex2D(SamplerCDBuffer2, texcoord);
+		float4 farFragment = tex2D(SamplerCDBuffer3, texcoord);
 		float4 nearFragment = tex2D(SamplerCDBuffer1, texcoord);
 		// multiply with far plane max blur so if we need to have 0 blur we get full res 
 		float realCoC = tex2D(SamplerCDCoC, texcoord).r * clamp(0, 1, FarPlaneMaxBlur);
@@ -920,11 +925,30 @@ namespace CinematicDOF
 		fragment.rgb = lerp(fragment.rgb, nearFragment.rgb, nearFragment.a * (NearPlaneMaxBlur != 0));
 		fragment.a = 1.0;
 	}
+
+	// Pixel shader which performs a 9 tap tentfilter on the far plane blur result. This tent filter is from the composition pass 
+	// in KinoBokeh: https://github.com/keijiro/KinoBokeh/blob/master/Assets/Kino/Bokeh/Shader/Composition.cginc
+	// See also [Jimenez2014] for a discussion about this filter.
+	void PS_TentFilter(float4 vpos : SV_Position, float2 texcoord : TEXCOORD, out float4 fragment : SV_Target0)
+	{
+		float4 coord = ReShade::PixelSize.xyxy * float4(1, 1, -1, 0);
+		float4 average;
+		average = tex2D(SamplerCDBuffer2, texcoord - coord.xy);
+		average += tex2D(SamplerCDBuffer2, texcoord - coord.wy) * 2;
+		average += tex2D(SamplerCDBuffer2, texcoord - coord.zy);
+		average += tex2D(SamplerCDBuffer2, texcoord + coord.zw) * 2;
+		average += tex2D(SamplerCDBuffer2, texcoord) * 4;
+		average += tex2D(SamplerCDBuffer2, texcoord + coord.xw) * 2;
+		average += tex2D(SamplerCDBuffer2, texcoord + coord.zy);
+		average += tex2D(SamplerCDBuffer2, texcoord + coord.wy) * 2;
+		average += tex2D(SamplerCDBuffer2, texcoord + coord.xy);
+		fragment = average / 16;
+	}
 	
 	// Pixel shader which performs the first part of the gaussian post-blur smoothing pass, to iron out undersampling issues with the disc blur
 	void PS_PostSmoothing1(float4 vpos : SV_Position, float2 texcoord : TEXCOORD, out float4 fragment : SV_Target0)
 	{
-		fragment = PerformFullFragmentGaussianBlur(SamplerCDBuffer3, texcoord, float2(ReShade::PixelSize.x, 0.0));
+		fragment = PerformFullFragmentGaussianBlur(SamplerCDBuffer4, texcoord, float2(ReShade::PixelSize.x, 0.0));
 	}
 
 	// Pixel shader which performs the second part of the gaussian post-blur smoothing pass, to iron out undersampling issues with the disc blur
@@ -960,8 +984,8 @@ namespace CinematicDOF
 			return;
 		}
 #endif
-		fragment = PerformFullFragmentGaussianBlur(SamplerCDBuffer4, focusInfo.texcoord, float2(0.0, ReShade::PixelSize.y));
-		float4 originalFragment = tex2D(SamplerCDBuffer3, focusInfo.texcoord);
+		fragment = PerformFullFragmentGaussianBlur(SamplerCDBuffer5, focusInfo.texcoord, float2(0.0, ReShade::PixelSize.y));
+		float4 originalFragment = tex2D(SamplerCDBuffer4, focusInfo.texcoord);
 		float coc = abs(tex2Dlod(SamplerCDCoC, float4(focusInfo.texcoord, 0, 0)).r);
 		fragment.rgb = lerp(originalFragment.rgb, fragment.rgb, saturate(coc < length(ReShade::PixelSize) ? 0 : 4 * coc));
 		fragment.w = 1.0;
@@ -1022,8 +1046,9 @@ namespace CinematicDOF
 		pass PreBlur { VertexShader = VS_DiscBlur; PixelShader = PS_PreBlur; RenderTarget = texCDBuffer1; }
 		pass BokehBlur { VertexShader = VS_DiscBlur; PixelShader = PS_BokehBlur; RenderTarget = texCDBuffer2; }
 		pass NearBokehBlur { VertexShader = VS_DiscBlur; PixelShader = PS_NearBokehBlur; RenderTarget = texCDBuffer1; }
-		pass Combiner { VertexShader = PostProcessVS; PixelShader = PS_Combiner; RenderTarget = texCDBuffer3; }
-		pass PostSmoothing1 { VertexShader = PostProcessVS; PixelShader = PS_PostSmoothing1; RenderTarget = texCDBuffer4; }
+		pass TentFilter { VertexShader = PostProcessVS; PixelShader = PS_TentFilter; RenderTarget = texCDBuffer3; }
+		pass Combiner { VertexShader = PostProcessVS; PixelShader = PS_Combiner; RenderTarget = texCDBuffer4; }
+		pass PostSmoothing1 { VertexShader = PostProcessVS; PixelShader = PS_PostSmoothing1; RenderTarget = texCDBuffer5; }
 		pass PostSmoothing2AndFocusing { VertexShader = VS_Focus; PixelShader = PS_PostSmoothing2AndFocusing;}
 	}
 }
