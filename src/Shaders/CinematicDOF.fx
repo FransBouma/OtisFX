@@ -32,6 +32,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // Version history:
+// 01-mar-2019: 	v1.1.8: Added anamorphic bokeh support, so bokehs now get stretched and rotated based on the distance from the center of the screen. 
 // 08-jan-2019:		v1.1.7: Added 9-tap tent filter as described in [Jimenez2014) for mitigating undersampling. Implementation is from KinoBokeh (see credits below).
 // 02-jan-2019:		v1.1.6: When near plane max blur is set to 0, the original fragment is now used in the near plane instead of the half-res pixel. 
 // 19-dec-2018:		v1.1.5: Added far plane highlight normalizing for non-gained highlights. Added tooltip for reshade v4.x
@@ -130,16 +131,16 @@ namespace CinematicDOF
 		ui_type = "drag";
 		ui_min = 10; ui_max = 300.0;
 		ui_step = 1.0;
-		ui_tooltip = "Focal length of the used lens. The longer the focal length, the narrower the\ndepth of field and thus the more\nis out of focus";
-	> = 100.00;
+		ui_tooltip = "Focal length of the used lens. The longer the focal length, the narrower the\ndepth of field and thus the more is out of focus. For portraits, start with 120 or 150.";
+	> = 120.00;
 	uniform float FNumber <
 		ui_category = "Focusing";
 		ui_label = "Aperture (f-number)";
 		ui_type = "drag";
 		ui_min = 1; ui_max = 22.0;
 		ui_step = 0.1;
-		ui_tooltip = "The f-number (also known as f-stop) to use. The higher the number, the wider\nthe depth of field, meaning the more is in-focus and thus the less is out of focus";
-	> = 4.6;
+		ui_tooltip = "The f-number (also known as f-stop) to use. The higher the number, the wider\nthe depth of field, meaning the more is in-focus and thus the less is out of focus.\nFor portraits, start with 2.8.";
+	> = 2.8;
 	// ------------- FOCUSING, OVERLAY
 	uniform bool ShowOutOfFocusPlaneOnMouseDown <
 		ui_category = "Focusing, overlay";
@@ -221,6 +222,22 @@ namespace CinematicDOF
 		ui_label = "Highlight type";
 		ui_tooltip = "The type of highlights to produce. For Twinkle circlets it's recommended to keep\nHighlight thresholds at 0.5 or higher for blur without a highlight";
 	> = 1;
+	uniform float HighlightAnamorphicFactor <
+		ui_category = "Highlight tweaking, anamorphism";
+		ui_label="Highlight anamorphic factor";
+		ui_type = "drag";
+		ui_min = 0.001; ui_max = 1.000;
+		ui_tooltip = "The anamorphic factor of the bokeh highlights. A value of 1.0 (default) gives perfect circles, a factor of e.g. 0.1 gives thin ellipses";
+		ui_step = 0.001;
+	> = 1.0;
+	uniform float HighlightAnamorphicSpreadFactor <
+		ui_category = "Highlight tweaking, anamorphism";
+		ui_label="Highlight anamorphic spread factor";
+		ui_type = "drag";
+		ui_min = 0.00; ui_max = 1.00;
+		ui_tooltip = "The spread factor for the anamorphic factor. 0.0 means it's relative to the distance\nto the center of the screen, 1.0 means the factor is applied everywhere evenly,\nno matter how far the pixel is to the center of the screen.";
+		ui_step = 0.01;
+	> = 0.0;
 	uniform float HighlightGainFarPlane <
 		ui_category = "Highlight tweaking, far plane";
 		ui_label = "Highlight gain";
@@ -370,6 +387,33 @@ namespace CinematicDOF
 	//
 	//////////////////////////////////////////////////
 	
+	// returns 2 vectors, (x,y) are up vector, (z,w) are right vector. 
+	// In: pixelVector which is the current pixel converted into a vector where (0,0) is the center of the screen.
+	float4 CalculateAnamorphicFactor(float2 pixelVector)
+	{
+		float normalizedFactor = lerp(1, HighlightAnamorphicFactor, lerp(length(pixelVector * 2), 1, HighlightAnamorphicSpreadFactor));
+		return float4(0, 1 + (1-normalizedFactor), normalizedFactor, 0);
+	}
+	
+	// Calculates a rotation matrix for the current pixel specified in texcoord, which can be used to rotate the bokeh shape to match
+	// a distored field around the center of the screen: it rotates the anamorphic factors with this matrix so the bokeh shapes form a circle
+	// around the center of the screen. 
+	float2x2 CalculateAnamorphicRotationMatrix(float2 texcoord)
+	{
+		float2 pixelVector = normalize(texcoord - 0.5);
+		float2 refVector = normalize(float2(-0.5, 0));
+		float2 sincosFactor = float2(0,0);
+		sincos(atan2(pixelVector.y, pixelVector.x) - atan2(refVector.y, refVector.x), sincosFactor.x, sincosFactor.y);
+		return float2x2(sincosFactor.y, sincosFactor.x, -sincosFactor.x, sincosFactor.y);
+	}
+	
+	float2 MorphPointOffsetWithAnamorphicDeltas(float2 pointOffset, float4 anamorphicFactors, float2x2 anamorphicRotationMatrix)
+	{
+		pointOffset.x = pointOffset.x * anamorphicFactors.x + pointOffset.x*anamorphicFactors.z;
+		pointOffset.y = pointOffset.y * anamorphicFactors.y + pointOffset.y*anamorphicFactors.w;
+		return mul(pointOffset, anamorphicRotationMatrix);
+	}
+	
 	// Gathers min CoC from a horizontal range of pixels around the pixel at texcoord, for a range of -TILE_SIZE+1 to +TILE_SIZE+1.
 	// returns minCoC
 	float PerformTileGatherHorizontal(sampler source, float2 texcoord)
@@ -510,6 +554,8 @@ namespace CinematicDOF
 		float pointsOnRing = pointsFirstRing;
 		float2 currentRingRadiusCoords = ringRadiusDeltaCoords;
 		float maxLuma = saturate((dot(fragment.rgb, lumaDotWeight) * fragmentRadii.g)-HighlightThresholdNearPlane) * (1.0-edgeBiasToUse);
+		float4 anamorphicFactors = CalculateAnamorphicFactor(blurInfo.texcoord - 0.5); // xy are up vector, zw are right vector
+		float2x2 anamorphicRotationMatrix = CalculateAnamorphicRotationMatrix(blurInfo.texcoord);
 		for(float ringIndex = 0; ringIndex < numberOfRings; ringIndex++)
 		{
 			float anglePerPoint = 6.28318530717958 / pointsOnRing;
@@ -519,6 +565,9 @@ namespace CinematicDOF
 			for(float pointNumber = 0; pointNumber < pointsOnRing; pointNumber++)
 			{
 				sincos(angle, pointOffset.y, pointOffset.x);
+				// now transform the offset vector with the anamorphic factors and rotate it accordingly to the rotation matrix, so we get a nice
+				// bending around the center of the screen.
+				pointOffset = MorphPointOffsetWithAnamorphicDeltas(pointOffset, anamorphicFactors, anamorphicRotationMatrix);
 				float4 tapCoords = float4(blurInfo.texcoord + (pointOffset * currentRingRadiusCoords), 0, 0);
 				float4 tap = tex2Dlod(source, tapCoords);
 				// r contains blurred CoC, g contains original CoC. Original can be negative
@@ -580,6 +629,8 @@ namespace CinematicDOF
 		float pointsOnRing = pointsFirstRing;
 		float maxLuma = saturate((fragment.a * fragmentRadius)-HighlightThresholdFarPlane) * saturate(1.0-HighlightEdgeBias);
 		float3 maxColor = average.rgb;
+		float4 anamorphicFactors = CalculateAnamorphicFactor(blurInfo.texcoord - 0.5); // xy are up vector, zw are right vector
+		float2x2 anamorphicRotationMatrix = CalculateAnamorphicRotationMatrix(blurInfo.texcoord);
 		for(float ringIndex = 0; ringIndex < blurInfo.numberOfRings; ringIndex++)
 		{
 			float anglePerPoint = 6.28318530717958 / pointsOnRing;
@@ -589,6 +640,9 @@ namespace CinematicDOF
 			for(float pointNumber = 0; pointNumber < pointsOnRing; pointNumber++)
 			{
 				sincos(angle, pointOffset.y, pointOffset.x);
+				// now transform the offset vector with the anamorphic factors and rotate it accordingly to the rotation matrix, so we get a nice
+				// bending around the center of the screen.
+				pointOffset = MorphPointOffsetWithAnamorphicDeltas(pointOffset, anamorphicFactors, anamorphicRotationMatrix);
 				float4 tapCoords = float4(blurInfo.texcoord + (pointOffset * currentRingRadiusCoords), 0, 0);
 				float sampleRadius = tex2Dlod(SamplerCDCoC, tapCoords).r;
 				float4 tap = tex2Dlod(source, tapCoords);
