@@ -224,10 +224,10 @@ namespace CinematicDOF
 	> = 1;
 	uniform float HighlightAnamorphicFactor <
 		ui_category = "Highlight tweaking, anamorphism";
-		ui_label="anamorphic factor";
+		ui_label="Anamorphic factor";
 		ui_type = "drag";
 		ui_min = 0.01; ui_max = 1.00;
-		ui_tooltip = "The anamorphic factor of the bokeh highlights. A value of 1.0 (default) gives perfect circles, a factor of e.g. 0.1 gives thin ellipses";
+		ui_tooltip = "The anamorphic factor of the bokeh highlights. A value of 1.0 (default) gives perfect\ncircles, a factor of e.g. 0.1 gives thin ellipses";
 		ui_step = 0.01;
 	> = 1.0;
 	uniform float HighlightAnamorphicSpreadFactor <
