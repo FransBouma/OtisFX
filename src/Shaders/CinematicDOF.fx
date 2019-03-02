@@ -32,7 +32,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // Version history:
-// 01-mar-2019: 	v1.1.8: Added anamorphic bokeh support, so bokehs now get stretched and rotated based on the distance from the center of the screen. 
+// 02-mar-2019: 	v1.1.8: Added anamorphic bokeh support, so bokehs now get stretched and rotated based on the distance from the center of the screen, with various tweaks.
 // 08-jan-2019:		v1.1.7: Added 9-tap tent filter as described in [Jimenez2014) for mitigating undersampling. Implementation is from KinoBokeh (see credits below).
 // 02-jan-2019:		v1.1.6: When near plane max blur is set to 0, the original fragment is now used in the near plane instead of the half-res pixel. 
 // 19-dec-2018:		v1.1.5: Added far plane highlight normalizing for non-gained highlights. Added tooltip for reshade v4.x
@@ -224,18 +224,26 @@ namespace CinematicDOF
 	> = 1;
 	uniform float HighlightAnamorphicFactor <
 		ui_category = "Highlight tweaking, anamorphism";
-		ui_label="Highlight anamorphic factor";
+		ui_label="anamorphic factor";
 		ui_type = "drag";
-		ui_min = 0.001; ui_max = 1.000;
+		ui_min = 0.01; ui_max = 1.00;
 		ui_tooltip = "The anamorphic factor of the bokeh highlights. A value of 1.0 (default) gives perfect circles, a factor of e.g. 0.1 gives thin ellipses";
-		ui_step = 0.001;
+		ui_step = 0.01;
 	> = 1.0;
 	uniform float HighlightAnamorphicSpreadFactor <
 		ui_category = "Highlight tweaking, anamorphism";
-		ui_label="Highlight anamorphic spread factor";
+		ui_label="Anamorphic spread factor";
 		ui_type = "drag";
 		ui_min = 0.00; ui_max = 1.00;
 		ui_tooltip = "The spread factor for the anamorphic factor. 0.0 means it's relative to the distance\nto the center of the screen, 1.0 means the factor is applied everywhere evenly,\nno matter how far the pixel is to the center of the screen.";
+		ui_step = 0.01;
+	> = 0.0;
+	uniform float HighlightAnamorphicAlignmentFactor <
+		ui_category = "Highlight tweaking, anamorphism";
+		ui_label="Anamorphic alignment factor";
+		ui_type = "drag";
+		ui_min = 0.00; ui_max = 1.00;
+		ui_tooltip = "The alignment factor for the anamorphic deformation. 0.0 means you get evenly rotated\nellipses around the center of the screen, 1.0 means all bokeh highlights are\naligned vertically.";
 		ui_step = 0.01;
 	> = 0.0;
 	uniform float HighlightGainFarPlane <
@@ -401,6 +409,8 @@ namespace CinematicDOF
 	float2x2 CalculateAnamorphicRotationMatrix(float2 texcoord)
 	{
 		float2 pixelVector = normalize(texcoord - 0.5);
+		float limiter = (1-HighlightAnamorphicAlignmentFactor)/2;
+		pixelVector.y = clamp(pixelVector.y, -limiter, limiter);
 		float2 refVector = normalize(float2(-0.5, 0));
 		float2 sincosFactor = float2(0,0);
 		sincos(atan2(pixelVector.y, pixelVector.x) - atan2(refVector.y, refVector.x), sincosFactor.x, sincosFactor.y);
