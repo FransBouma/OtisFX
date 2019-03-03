@@ -413,6 +413,7 @@ namespace CinematicDOF
 		pixelVector.y = clamp(pixelVector.y, -limiter, limiter);
 		float2 refVector = normalize(float2(-0.5, 0));
 		float2 sincosFactor = float2(0,0);
+		// calculate the angle between the pixelvector and the ref vector and grab the sin/cos for that angle for the rotation matrix.
 		sincos(atan2(pixelVector.y, pixelVector.x) - atan2(refVector.y, refVector.x), sincosFactor.x, sincosFactor.y);
 		return float2x2(sincosFactor.y, sincosFactor.x, -sincosFactor.x, sincosFactor.y);
 	}
