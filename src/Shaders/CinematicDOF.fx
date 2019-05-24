@@ -32,6 +32,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // Version history:
+// 24-may-2019:		v1.1.9: Better near-plane bleed mask. Better far plane pixel weights so more samples get accepted.
 // 02-mar-2019: 	v1.1.8: Added anamorphic bokeh support, so bokehs now get stretched and rotated based on the distance from the center of the screen, with various tweaks.
 // 08-jan-2019:		v1.1.7: Added 9-tap tent filter as described in [Jimenez2014) for mitigating undersampling. Implementation is from KinoBokeh (see credits below).
 // 02-jan-2019:		v1.1.6: When near plane max blur is set to 0, the original fragment is now used in the near plane instead of the half-res pixel. 
@@ -82,7 +83,7 @@
 namespace CinematicDOF
 {
 // Uncomment line below for debug info / code / controls
-	#define CD_DEBUG 1
+//	#define CD_DEBUG 1
 
 	//////////////////////////////////////////////////
 	//
@@ -587,7 +588,6 @@ namespace CinematicDOF
 				float4 tap = tex2Dlod(source, tapCoords);
 				// r contains blurred CoC, g contains original CoC. Original can be negative
 				float2 sampleRadii = tex2Dlod(SamplerCDCoCBlurred, tapCoords).rg;
-				//ringNearPlaneRead = sampleRadii.g < 0 ? 0.2 : ringNearPlaneRead;
 				// luma is stored in alpha
 				threshold = max((tap.a - HighlightThresholdNearPlane), 0) * (sampleRadii.g < 0 ? HighlightGainNearPlane : 0);
 				float3 weightedTap = (tap.rgb + lerp(0, tap.rgb, threshold * abs(sampleRadii.r)));
