@@ -82,7 +82,7 @@
 namespace CinematicDOF
 {
 // Uncomment line below for debug info / code / controls
-//	#define CD_DEBUG 1
+	#define CD_DEBUG 1
 
 	//////////////////////////////////////////////////
 	//
@@ -306,7 +306,7 @@ namespace CinematicDOF
 		ui_min = 0.00; ui_max = 1.00;
 		ui_step = 0.01;
 	> = 0.0;
-	uniform bool ShowNearCoCBlur <
+	uniform bool ShowNearCoCTilesBlurredR <
 		ui_category = "Debugging";
 		ui_tooltip = "Shows the near coc blur buffer as b&w";
 	> = false;
@@ -316,10 +316,13 @@ namespace CinematicDOF
 	uniform bool ShowNearCoCTilesNeighbor <
 		ui_category = "Debugging";
 	> = false;
-	uniform bool ShowNearCoCTilesBlurred <
+	uniform bool ShowNearCoCTilesBlurredG <
 		ui_category = "Debugging";
 	> = false;
 	uniform bool ShowNearPlaneAlpha <
+		ui_category = "Debugging";
+	> = false;
+	uniform bool ShowNearPlaneBlurred <
 		ui_category = "Debugging";
 	> = false;
 #endif
@@ -338,9 +341,9 @@ namespace CinematicDOF
 	texture texCDCurrentFocus		{ Width = 1; Height = 1; Format = R16F; };		// for storing the current focus depth obtained from the focus point
 	texture texCDPreviousFocus		{ Width = 1; Height = 1; Format = R16F; };		// for storing the previous frame's focus depth from texCDCurrentFocus.
 	texture texCDCoC				{ Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; Format = R16F; };
-	texture texCDCoCTileTmp			{ Width = BUFFER_WIDTH/((TILE_SIZE*2)+1); Height = BUFFER_HEIGHT/((TILE_SIZE*2)+1); Format = R16F; };	// R is MinCoC
-	texture texCDCoCTile			{ Width = BUFFER_WIDTH/((TILE_SIZE*2)+1); Height = BUFFER_HEIGHT/((TILE_SIZE*2)+1); Format = R16F; };	// R is MinCoC
-	texture texCDCoCTileNeighbor	{ Width = BUFFER_WIDTH/((TILE_SIZE*2)+1); Height = BUFFER_HEIGHT/((TILE_SIZE*2)+1); Format = R16F; };	// R is MinCoC
+	texture texCDCoCTileTmp			{ Width = BUFFER_WIDTH/(TILE_SIZE*2); Height = BUFFER_HEIGHT/(TILE_SIZE*2); Format = R16F; };	// R is MinCoC
+	texture texCDCoCTile			{ Width = BUFFER_WIDTH/(TILE_SIZE*2); Height = BUFFER_HEIGHT/(TILE_SIZE*2); Format = R16F; };	// R is MinCoC
+	texture texCDCoCTileNeighbor	{ Width = BUFFER_WIDTH/(TILE_SIZE*2); Height = BUFFER_HEIGHT/(TILE_SIZE*2); Format = R16F; };	// R is MinCoC
 	texture texCDCoCTmp1			{ Width = BUFFER_WIDTH/2; Height = BUFFER_HEIGHT/2; Format = R16F; };	// half res, single value
 	texture texCDCoCBlurred			{ Width = BUFFER_WIDTH/2; Height = BUFFER_HEIGHT/2; Format = RG16F; };	// half res, blurred CoC (r) and real CoC (g)
 	texture texCDBuffer1 			{ Width = BUFFER_WIDTH/2; Height = BUFFER_HEIGHT/2; Format = RGBA8; };
@@ -526,8 +529,8 @@ namespace CinematicDOF
 	{
 		float radiusToUse = (absoluteSampleRadius ==0 ? 1 : absoluteSampleRadius) * 0.5;
 		return min(rcp(radiusToUse * radiusToUse * PI), rcp(0.5 * 0.5 * PI))
-				* saturate(radiusToUse - ringDistance) / radiusToUse
-				* saturate(1-ringDistance);
+						* lerp(saturate(radiusToUse - ringDistance) / radiusToUse, 1, 70* absoluteSampleRadius)
+						* saturate(1-ringDistance);
 	}
 	
 	// Same as PerformDiscBlur but this time for the near plane. It's in a separate function to avoid a lot of if/switch statements as
@@ -561,12 +564,13 @@ namespace CinematicDOF
 		float threshold = max((fragment.a - HighlightThresholdNearPlane) * HighlightGainNearPlane, 0);
 		float4 average = float4((fragment.rgb + lerp(0, fragment.rgb, threshold * fragmentRadiusToUse * 0.01)) * (1-edgeBiasToUse), (1.0-edgeBiasToUse));
 		float2 pointOffset = float2(0,0);
-		float2 ringRadiusDeltaCoords = ReShade::PixelSize * lerp(0.0, blurInfo.nearPlaneMaxBlurInPixels, fragmentRadiusToUse) / (numberOfRings-1);
+		float2 ringRadiusDeltaCoords = ReShade::PixelSize * (lerp(0.0, blurInfo.nearPlaneMaxBlurInPixels, fragmentRadiusToUse) / (numberOfRings-1));
 		float pointsOnRing = pointsFirstRing;
 		float2 currentRingRadiusCoords = ringRadiusDeltaCoords;
 		float maxLuma = saturate((dot(fragment.rgb, lumaDotWeight) * fragmentRadii.g)-HighlightThresholdNearPlane) * (1.0-edgeBiasToUse);
 		float4 anamorphicFactors = CalculateAnamorphicFactor(blurInfo.texcoord - 0.5); // xy are up vector, zw are right vector
 		float2x2 anamorphicRotationMatrix = CalculateAnamorphicRotationMatrix(blurInfo.texcoord);
+		
 		for(float ringIndex = 0; ringIndex < numberOfRings; ringIndex++)
 		{
 			float anglePerPoint = 6.28318530717958 / pointsOnRing;
@@ -583,6 +587,7 @@ namespace CinematicDOF
 				float4 tap = tex2Dlod(source, tapCoords);
 				// r contains blurred CoC, g contains original CoC. Original can be negative
 				float2 sampleRadii = tex2Dlod(SamplerCDCoCBlurred, tapCoords).rg;
+				//ringNearPlaneRead = sampleRadii.g < 0 ? 0.2 : ringNearPlaneRead;
 				// luma is stored in alpha
 				threshold = max((tap.a - HighlightThresholdNearPlane), 0) * (sampleRadii.g < 0 ? HighlightGainNearPlane : 0);
 				float3 weightedTap = (tap.rgb + lerp(0, tap.rgb, threshold * abs(sampleRadii.r)));
@@ -596,18 +601,24 @@ namespace CinematicDOF
 		}
 		
 		average.rgb/=(average.w + (average.w ==0));
-		float alpha = saturate(2 * (fragmentRadiusToUse > 0.1 ? 2 * fragmentRadiusToUse : max(fragmentRadiusToUse, -fragmentRadii.g)));
+		float alpha = saturate(2 * (fragmentRadiusToUse > 0.1 ? (fragmentRadii.g <=0 ? 2 : 1) * fragmentRadiusToUse : max(fragmentRadiusToUse, -fragmentRadii.g)));
 		fragment = average;
+		fragment.a = alpha;
 #if CD_DEBUG
 		if(ShowNearPlaneAlpha)
 		{
-			fragment.rgb = float3(alpha, alpha, alpha);
+			fragment = float4(alpha, alpha, alpha, 1.0);
 		}
 #endif
 		float newLuma = dot(fragment.rgb, lumaDotWeight);
 		// increase luma to the max luma found, if setting is enabled.
 		fragment.rgb *= 1+saturate(maxLuma-newLuma) * HighlightType;
-		fragment.a = alpha;
+#if CD_DEBUG
+		if(ShowNearPlaneBlurred)
+		{
+			fragment.a = 1.0;
+		}
+#endif
 		return fragment;
 	}
 
@@ -688,7 +699,6 @@ namespace CinematicDOF
 	// Out: RGBA fragment that's the result of the disc-blur on the pixel at texcoord in source. A contains luma of RGB.
 	float4 PerformPreDiscBlur(VSDISCBLURINFO blurInfo, sampler2D source)
 	{
-		const float3 lumaDotWeight = float3(0.3, 0.59, 0.11);
 		const float radiusFactor = 1.0/5.0;
 		const float pointsFirstRing = 7; 	// each ring has a multiple of this value of sample points. 
 		float4 fragment = tex2Dlod(source, float4(blurInfo.texcoord, 0, 0));
@@ -705,7 +715,6 @@ namespace CinematicDOF
 												* rcp((numberOfRings-1) + (numberOfRings==1));
 		float pointsOnRing = pointsFirstRing;
 		float2 currentRingRadiusCoords = ringRadiusDeltaCoords;
-		float maxLuma = dot(fragment.rgb, lumaDotWeight) * (absoluteFragmentRadius < 0.01 ? 0 : 1);
 		float cocPerRing = length(currentRingRadiusCoords) * 0.5;
 		for(float ringIndex = 0; ringIndex < numberOfRings; ringIndex++)
 		{
@@ -722,7 +731,6 @@ namespace CinematicDOF
 				float lumaWeight = absoluteFragmentRadius - absoluteSampleRadius < 0.001;
 				float weight = CalculateSampleWeight(blurInfo.cocFactorPerPixel * absoluteSampleRadius, ringDistance) * isSamePlaneAsFragment * lumaWeight;
 				float3 tap = tex2Dlod(source, tapCoords).rgb;
-				maxLuma = max(maxLuma, isSamePlaneAsFragment * dot(tap.rgb, lumaDotWeight) * lumaWeight * (weight > 0.1));
 				average.rgb += tap * weight;
 				average.w += weight;
 				angle+=anglePerPoint;
@@ -731,9 +739,8 @@ namespace CinematicDOF
 			currentRingRadiusCoords += ringRadiusDeltaCoords;
 		}
 		fragment.rgb = average.rgb/(average.w + (average.w==0));
-		fragment.rgb *= 1+saturate(maxLuma-dot(fragment.rgb, lumaDotWeight));
 		// store luma of new rgb in alpha so we don't need to calculate it again.
-		fragment.a = dot(fragment.rgb, lumaDotWeight);
+		fragment.a = dot(fragment.rgb, float3(0.3, 0.59, 0.11));
 		return fragment;
 	}
 
@@ -971,7 +978,8 @@ namespace CinematicDOF
 	{
 		// from tmp1 to tmp2. Merge original CoC into g.
 		fragment = float2(PerformSingleValueGaussianBlur(SamplerCDCoCTmp1, texcoord, 
-											float2(0.0, ReShade::PixelSize.y * (ReShade::ScreenSize.y/GROUND_TRUTH_SCREEN_HEIGHT)), false), tex2D(SamplerCDCoC, texcoord).x);
+														 float2(0.0, ReShade::PixelSize.y * (ReShade::ScreenSize.y/GROUND_TRUTH_SCREEN_HEIGHT)), false), 
+						  tex2D(SamplerCDCoC, texcoord).x);
 	}
 	
 	// Pixel shader which combines 2 half-res sources to a full res output. From texCDBuffer1 & 2 to texCDBuffer4.
@@ -1028,9 +1036,9 @@ namespace CinematicDOF
 			return;
 		}
 #if CD_DEBUG
-		if(ShowNearCoCBlur)
+		if(ShowNearCoCTilesBlurredG)
 		{
-			fragment = GetDebugFragment(tex2D(SamplerCDCoCBlurred, focusInfo.texcoord).r, false);
+			fragment = GetDebugFragment(tex2D(SamplerCDCoCBlurred, focusInfo.texcoord).g, false);
 			return;
 		}
 		if(ShowNearCoCTiles)
@@ -1038,7 +1046,7 @@ namespace CinematicDOF
 			fragment = GetDebugFragment(tex2D(SamplerCDCoCTile, focusInfo.texcoord).r, true);
 			return;
 		}
-		if(ShowNearCoCTilesBlurred)
+		if(ShowNearCoCTilesBlurredR)
 		{
 			fragment = GetDebugFragment(tex2D(SamplerCDCoCBlurred, focusInfo.texcoord).r, true);
 			return;
