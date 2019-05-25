@@ -307,6 +307,12 @@ namespace CinematicDOF
 		ui_min = 0.00; ui_max = 1.00;
 		ui_step = 0.01;
 	> = 0.0;
+	uniform float DBVal4f <
+		ui_category = "Debugging";
+		ui_type = "drag";
+		ui_min = 0.00; ui_max = 3.00;
+		ui_step = 0.00;
+	> = 1.0;
 	uniform bool ShowNearCoCTilesBlurredR <
 		ui_category = "Debugging";
 		ui_tooltip = "Shows the near coc blur buffer as b&w";
@@ -530,7 +536,8 @@ namespace CinematicDOF
 	{
 		float radiusToUse = (absoluteSampleRadius ==0 ? 1 : absoluteSampleRadius) * 0.5;
 		return min(rcp(radiusToUse * radiusToUse * PI), rcp(0.5 * 0.5 * PI))
-						* lerp(saturate(radiusToUse - ringDistance) / radiusToUse, 1, 70* absoluteSampleRadius)
+						* lerp(saturate(radiusToUse - ringDistance) / radiusToUse, 1, 
+							lerp(0, 70* absoluteSampleRadius, saturate(2.5-FarPlaneMaxBlur)))
 						* saturate(1-ringDistance);
 	}
 	
@@ -672,6 +679,7 @@ namespace CinematicDOF
 				float weight = (sampleRadius >=0) * ringWeight * CalculateSampleWeight(blurInfo.cocFactorPerPixel * absoluteSampleRadius, ringDistance);
 				// luma is stored in alpha.
 				float3 gainedTap = (tap.rgb + lerp(0, tap.rgb, max(tap.a, 0) * HighlightGainFarPlane * absoluteSampleRadius));
+				gainedTap = gainedTap / (1.5 - clamp(gainedTap, 0, 1.49));	// accentuate 'whites'. 1.5 factor empirically determined.
 				average.rgb += gainedTap * weight;
 				average.w += weight;
 				float lumaSample = saturate((dot(gainedTap.rgb, lumaDotWeight) * sampleRadius )-HighlightThresholdFarPlane) * ringWeight;
@@ -687,7 +695,8 @@ namespace CinematicDOF
 		fragment.rgb = lerp(fragment.rgb, maxColor, min(saturate(maxLuma-newFragmentLuma), HighlightNormalizingFactor));
 		newFragmentLuma = dot(fragment.rgb, lumaDotWeight);
 		// increase luma to the max luma found, if setting is enabled.
-		fragment.rgb *= 1+saturate(maxLuma-newFragmentLuma) * HighlightType;
+		fragment.rgb *= (1+saturate(maxLuma-newFragmentLuma) * HighlightType);
+		fragment.rgb = (fragment.rgb * 1.5) / (1.0 + fragment.rgb);		// correct for 'whites' accentuation in taps. 1.5 factor is empirically determined
 		return fragment;
 	}
 	
