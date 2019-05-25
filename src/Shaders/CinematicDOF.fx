@@ -32,6 +32,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // Version history:
+// 25-may-2019:	   v1.1.10: Added white boost/correction in gathering passes to have lower-intensity highlights become less prominent. 
+//							Added further weight adjustment tweaks. Changed highlight defaults to utilize code changed in 1.1.9/1.1.10
 // 24-may-2019:		v1.1.9: Better near-plane bleed mask. Better far plane pixel weights so more samples get accepted.
 // 02-mar-2019: 	v1.1.8: Added anamorphic bokeh support, so bokehs now get stretched and rotated based on the distance from the center of the screen, with various tweaks.
 // 08-jan-2019:		v1.1.7: Added 9-tap tent filter as described in [Jimenez2014) for mitigating undersampling. Implementation is from KinoBokeh (see credits below).
@@ -213,16 +215,16 @@ namespace CinematicDOF
 		ui_label="Highlight edge bias";
 		ui_type = "drag";
 		ui_min = 0.00; ui_max = 1.00;
-		ui_tooltip = "The bias for the highlight: 0 means evenly spread, 1.5 means everything is at the\nedge of the bokeh circle.";
+		ui_tooltip = "The bias for the highlight: 0 means evenly spread, 1.0 means everything is at the\nedge of the bokeh circle.";
 		ui_step = 0.01;
-	> = 0.0;
+	> = 0.100;
 	uniform uint HighlightType <
 		ui_type = "combo";
 		ui_min= 0; ui_max=1;
 		ui_items="Bloom burn\0Twinkle circlets\0";
 		ui_label = "Highlight type";
-		ui_tooltip = "The type of highlights to produce. For Twinkle circlets it's recommended to keep\nHighlight thresholds at 0.5 or higher for blur without a highlight";
-	> = 1;
+		ui_tooltip = "The type of highlights to produce. For Bloom burn it's recommended to have highlight normalization set to a value slightly above 0";
+	> = 0;
 	uniform float HighlightAnamorphicFactor <
 		ui_category = "Highlight tweaking, anamorphism";
 		ui_label="Anamorphic factor";
@@ -262,15 +264,15 @@ namespace CinematicDOF
 		ui_min = 0.00; ui_max = 1.00;
 		ui_tooltip = "The threshold for the source pixels. Pixels with a luminosity above this threshold\nwill be highlighted. Raise this value to only keep the highlights you want.\nWhen highlight type is Twinkle circlets, set the threshold at 0.5 or higher\nfor blur without highlights.";
 		ui_step = 0.01;
-	> = 0.5;
+	> = 0.0;
 	uniform float HighlightNormalizingFactor <
 		ui_category = "Highlight tweaking, far plane";
 		ui_label="Highlight normalizing factor";
 		ui_type = "drag";
 		ui_min = 0.00; ui_max = 1.00;
-		ui_tooltip = "(Advanced feature). When Twinkle circlets is used for highlights, this factor is\nused to determine the color of highlight circlets.";
+		ui_tooltip = "(Advanced feature). This factor is\nused to normalize/even out the color of highlight circlets.";
 		ui_step = 0.01;
-	> = 0.00;
+	> = 0.100;
 	uniform float HighlightGainNearPlane <
 		ui_category = "Highlight tweaking, near plane";
 		ui_label = "Highlight gain";
@@ -286,7 +288,7 @@ namespace CinematicDOF
 		ui_min = 0.00; ui_max = 1.00;
 		ui_tooltip = "The threshold for the source pixels. Pixels with a luminosity above this threshold\nwill be highlighted. Raise this value to only keep the highlights you want.\nWhen highlight type is Twinkle circlets, set the threshold at 0.5 or higher\nfor blur without highlights.";
 		ui_step = 0.01;
-	> = 0.5;
+	> = 0.0;
 	// ------------- ADVANCED SETTINGS
 	uniform bool ShowCoCValues <
 		ui_category = "Advanced";
@@ -404,6 +406,16 @@ namespace CinematicDOF
 	// Functions
 	//
 	//////////////////////////////////////////////////
+	
+	float3 AccentuateWhites(float3 fragment)
+	{
+		return fragment / (1.5 - clamp(fragment, 0, 1.49));	// accentuate 'whites'. 1.5 factor was empirically determined.
+	}
+	
+	float3 CorrectForWhiteAccentuation(float3 fragment)
+	{
+		return (fragment.rgb * 1.5) / (1.0 + fragment.rgb);		// correct for 'whites' accentuation in taps. 1.5 factor was empirically determined.
+	}
 	
 	// returns 2 vectors, (x,y) are up vector, (z,w) are right vector. 
 	// In: pixelVector which is the current pixel converted into a vector where (0,0) is the center of the screen.
@@ -564,6 +576,7 @@ namespace CinematicDOF
 			return fragment;
 		}
 		
+		fragment.rgb = AccentuateWhites(fragment.rgb);
 		// use one extra ring as undersampling is really prominent in near-camera objects.
 		float numberOfRings = max(blurInfo.numberOfRings, 1) + 1;
 		float pointsFirstRing = 7;
@@ -597,7 +610,7 @@ namespace CinematicDOF
 				float2 sampleRadii = tex2Dlod(SamplerCDCoCBlurred, tapCoords).rg;
 				// luma is stored in alpha
 				threshold = max((tap.a - HighlightThresholdNearPlane), 0) * (sampleRadii.g < 0 ? HighlightGainNearPlane : 0);
-				float3 weightedTap = (tap.rgb + lerp(0, tap.rgb, threshold * abs(sampleRadii.r)));
+				float3 weightedTap = AccentuateWhites(tap.rgb + lerp(0, tap.rgb, threshold * abs(sampleRadii.r)));
 				average.rgb += weightedTap * weight;
 				average.w += weight;
 				maxLuma = max(maxLuma, saturate((dot(weightedTap.rgb, lumaDotWeight)-HighlightThresholdNearPlane) * weight));
@@ -620,6 +633,7 @@ namespace CinematicDOF
 		float newLuma = dot(fragment.rgb, lumaDotWeight);
 		// increase luma to the max luma found, if setting is enabled.
 		fragment.rgb *= 1+saturate(maxLuma-newLuma) * HighlightType;
+		fragment.rgb = CorrectForWhiteAccentuation(fragment.rgb);
 #if CD_DEBUG
 		if(ShowNearPlaneBlurred)
 		{
@@ -647,7 +661,7 @@ namespace CinematicDOF
 			// near plane fragment, will be done in near plane pass 
 			return fragment;
 		}
-		
+		fragment.rgb = AccentuateWhites(fragment.rgb);
 		// luma is stored in alpha
 		float pixelLumaGain = max(fragment.a, 0) * HighlightGainFarPlane;
 		float4 average = float4((fragment.rgb + lerp(0, fragment.rgb, pixelLumaGain * fragmentRadius)) * saturate(1.0-HighlightEdgeBias), saturate(1.0-HighlightEdgeBias));
@@ -678,8 +692,7 @@ namespace CinematicDOF
 				float absoluteSampleRadius = abs(sampleRadius);
 				float weight = (sampleRadius >=0) * ringWeight * CalculateSampleWeight(blurInfo.cocFactorPerPixel * absoluteSampleRadius, ringDistance);
 				// luma is stored in alpha.
-				float3 gainedTap = (tap.rgb + lerp(0, tap.rgb, max(tap.a, 0) * HighlightGainFarPlane * absoluteSampleRadius));
-				gainedTap = gainedTap / (1.5 - clamp(gainedTap, 0, 1.49));	// accentuate 'whites'. 1.5 factor empirically determined.
+				float3 gainedTap = AccentuateWhites(tap.rgb + lerp(0, tap.rgb, max(tap.a, 0) * HighlightGainFarPlane * absoluteSampleRadius));
 				average.rgb += gainedTap * weight;
 				average.w += weight;
 				float lumaSample = saturate((dot(gainedTap.rgb, lumaDotWeight) * sampleRadius )-HighlightThresholdFarPlane) * ringWeight;
@@ -696,7 +709,7 @@ namespace CinematicDOF
 		newFragmentLuma = dot(fragment.rgb, lumaDotWeight);
 		// increase luma to the max luma found, if setting is enabled.
 		fragment.rgb *= (1+saturate(maxLuma-newFragmentLuma) * HighlightType);
-		fragment.rgb = (fragment.rgb * 1.5) / (1.0 + fragment.rgb);		// correct for 'whites' accentuation in taps. 1.5 factor is empirically determined
+		fragment.rgb = CorrectForWhiteAccentuation(fragment.rgb);
 		return fragment;
 	}
 	
