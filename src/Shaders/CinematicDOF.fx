@@ -692,11 +692,11 @@ namespace CinematicDOF
 				float absoluteSampleRadius = abs(sampleRadius);
 				float weight = (sampleRadius >=0) * ringWeight * CalculateSampleWeight(blurInfo.cocFactorPerPixel * absoluteSampleRadius, ringDistance);
 				// luma is stored in alpha.
-				float3 gainedTap = AccentuateWhites(tap.rgb + lerp(0, tap.rgb, max(tap.a, 0) * HighlightGainFarPlane * absoluteSampleRadius));
+				float3 gainedTap = AccentuateWhites(tap.rgb + lerp(0, tap.rgb, max(tap.a, 0) * HighlightGainFarPlane * fragmentRadius));
 				average.rgb += gainedTap * weight;
 				average.w += weight;
 				float lumaSample = saturate((dot(gainedTap.rgb, lumaDotWeight) * sampleRadius )-HighlightThresholdFarPlane) * ringWeight;
-				maxColor = max(maxColor, gainedTap.rgb * (maxLuma < lumaSample));
+				maxColor = max(maxColor, gainedTap.rgb * (maxLuma < lumaSample) * weight);
 				maxLuma = max(maxLuma, lumaSample);
 				angle+=anglePerPoint;
 			}
