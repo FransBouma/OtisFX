@@ -1029,7 +1029,7 @@ namespace CinematicDOF
 		// 'magic' number to boost up the alpha.
 		float blendFactor = (realCoC > 0.1) ? 1 : smoothstep(0, 1, (realCoC / 0.1));
 		fragment = lerp(originalFragment, farFragment, blendFactor);
-		fragment.rgb = lerp(fragment.rgb, nearFragment.rgb, saturate(nearFragment.a * (NearPlaneMaxBlur != 0) * 1.3));
+		fragment.rgb = lerp(fragment.rgb, nearFragment.rgb, nearFragment.a * (NearPlaneMaxBlur != 0));
 		fragment.a = 1.0;
 	}
 
