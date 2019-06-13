@@ -87,7 +87,7 @@
 namespace CinematicDOF
 {
 // Uncomment line below for debug info / code / controls
-	#define CD_DEBUG 1
+//	#define CD_DEBUG 1
 
 	//////////////////////////////////////////////////
 	//
@@ -600,7 +600,7 @@ namespace CinematicDOF
 		float maxLuma = saturate((dot(fragment.rgb, lumaDotWeight) * fragmentRadii.g)-HighlightThresholdNearPlane) * (1.0-edgeBiasToUse);
 		float4 anamorphicFactors = CalculateAnamorphicFactor(blurInfo.texcoord - 0.5); // xy are up vector, zw are right vector
 		float2x2 anamorphicRotationMatrix = CalculateAnamorphicRotationMatrix(blurInfo.texcoord);
-		float3 maxColor = average.rgb;
+		float4 maxColor = float4(average.rgb, 0);
 		for(float ringIndex = 0; ringIndex < numberOfRings; ringIndex++)
 		{
 			float anglePerPoint = 6.28318530717958 / pointsOnRing;
@@ -620,10 +620,13 @@ namespace CinematicDOF
 				// luma is stored in alpha
 				threshold = max((tap.a - HighlightThresholdNearPlane), 0) * (sampleRadii.g < 0 ? HighlightGainNearPlane : 0);
 				float3 gainedTap = AccentuateWhites(tap.rgb + lerp(0, tap.rgb, threshold * abs(sampleRadii.r)));
-				average.rgb += gainedTap * weight;
+				float3 weightedGainedTap = gainedTap * weight;
+				average.rgb += weightedGainedTap;
 				average.w += weight;
 				float lumaSample = saturate((dot(gainedTap.rgb, lumaDotWeight)-HighlightThresholdNearPlane) * weight);
-				maxColor = max(maxColor, gainedTap.rgb * (maxLuma < lumaSample) * weight);
+				float3 gainedTapForMaxColor = weightedGainedTap * (maxLuma < lumaSample);
+				maxColor.a = gainedTapForMaxColor > maxColor.rgb ? weight : maxColor.a;
+				maxColor.rgb = max(maxColor.rgb, gainedTapForMaxColor);
 				maxLuma = max(maxLuma, lumaSample);
 				angle+=anglePerPoint;
 			}
@@ -642,7 +645,8 @@ namespace CinematicDOF
 		}
 #endif
 		float newFragmentLuma = dot(fragment.rgb, lumaDotWeight);
-		fragment.rgb = lerp(fragment.rgb, maxColor, min(saturate(dot(maxColor, lumaDotWeight)-newFragmentLuma), HighlightNormalizingFactorNearPlane));
+		maxColor.rgb /= (maxColor.a + (maxColor.a==0));
+		fragment.rgb = lerp(fragment.rgb, maxColor.rgb, min(saturate(dot(maxColor.rgb, lumaDotWeight)-newFragmentLuma), HighlightNormalizingFactorNearPlane));
 		newFragmentLuma = dot(fragment.rgb, lumaDotWeight);
 		// increase luma to the max luma found, if setting is enabled.
 		fragment.rgb *= 1+saturate(maxLuma-newFragmentLuma) * HighlightType;
@@ -684,7 +688,7 @@ namespace CinematicDOF
 		float cocPerRing = (fragmentRadius * FarPlaneMaxBlur) / blurInfo.numberOfRings;
 		float pointsOnRing = pointsFirstRing;
 		float maxLuma = saturate((fragment.a * fragmentRadius)-HighlightThresholdFarPlane) * saturate(1.0-HighlightEdgeBias);
-		float3 maxColor = average.rgb;
+		float4 maxColor = float4(average.rgb, 0);
 		float4 anamorphicFactors = CalculateAnamorphicFactor(blurInfo.texcoord - 0.5); // xy are up vector, zw are right vector
 		float2x2 anamorphicRotationMatrix = CalculateAnamorphicRotationMatrix(blurInfo.texcoord);
 		for(float ringIndex = 0; ringIndex < blurInfo.numberOfRings; ringIndex++)
@@ -705,10 +709,13 @@ namespace CinematicDOF
 				float weight = (sampleRadius >=0) * ringWeight * CalculateSampleWeight(sampleRadius * FarPlaneMaxBlur, ringDistance);
 				// luma is stored in alpha.
 				float3 gainedTap = AccentuateWhites(tap.rgb + lerp(0, tap.rgb, max(tap.a, 0) * HighlightGainFarPlane * fragmentRadius));
-				average.rgb += gainedTap * weight;
+				float3 weightedGainedTap = gainedTap * weight;
+				average.rgb += weightedGainedTap;
 				average.w += weight;
 				float lumaSample = saturate((dot(gainedTap.rgb, lumaDotWeight) * sampleRadius )-HighlightThresholdFarPlane) * ringWeight;
-				maxColor = max(maxColor, gainedTap.rgb * (maxLuma < lumaSample) * weight);
+				float3 gainedTapForMaxColor = weightedGainedTap * (maxLuma < lumaSample);
+				maxColor.a = gainedTapForMaxColor > maxColor.rgb ? weight : maxColor.a;
+				maxColor.rgb = max(maxColor.rgb, gainedTapForMaxColor);
 				maxLuma = max(maxLuma, lumaSample);
 				angle+=anglePerPoint;
 			}
@@ -717,7 +724,8 @@ namespace CinematicDOF
 		}
 		fragment.rgb = average.rgb / (average.w + (average.w==0));
 		float newFragmentLuma = dot(fragment.rgb, lumaDotWeight);
-		fragment.rgb = lerp(fragment.rgb, maxColor, min(saturate(dot(maxColor, lumaDotWeight)-newFragmentLuma), HighlightNormalizingFactorFarPlane));
+		maxColor.rgb /= (maxColor.a + (maxColor.a==0));
+		fragment.rgb = lerp(fragment.rgb, maxColor.rgb, min(saturate(dot(maxColor.rgb, lumaDotWeight)-newFragmentLuma), HighlightNormalizingFactorFarPlane));
 		newFragmentLuma = dot(fragment.rgb, lumaDotWeight);
 		// increase luma to the max luma found, if setting is enabled.
 		fragment.rgb *= (1+saturate(maxLuma-newFragmentLuma) * HighlightType);
