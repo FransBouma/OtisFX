@@ -32,6 +32,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // Version history:
+// 13-jun-2019:    v1.1.12: Bugfix in maxColor blending in near/far blur: no more dirty edges on large highlighted areas.
 // 10-jun-2019:	   v1.1.11: Added new weight calculation, added near-plane highlight normalization.
 // 25-may-2019:	   v1.1.10: Added white boost/correction in gathering passes to have lower-intensity highlights become less prominent. 
 //							Added further weight adjustment tweaks. Changed highlight defaults to utilize code changed in 1.1.9/1.1.10
@@ -86,7 +87,7 @@
 namespace CinematicDOF
 {
 // Uncomment line below for debug info / code / controls
-//	#define CD_DEBUG 1
+	#define CD_DEBUG 1
 
 	//////////////////////////////////////////////////
 	//
@@ -641,7 +642,7 @@ namespace CinematicDOF
 		}
 #endif
 		float newFragmentLuma = dot(fragment.rgb, lumaDotWeight);
-		fragment.rgb = lerp(fragment.rgb, maxColor, min(saturate(maxLuma-newFragmentLuma), HighlightNormalizingFactorNearPlane));
+		fragment.rgb = lerp(fragment.rgb, maxColor, min(saturate(dot(maxColor, lumaDotWeight)-newFragmentLuma), HighlightNormalizingFactorNearPlane));
 		newFragmentLuma = dot(fragment.rgb, lumaDotWeight);
 		// increase luma to the max luma found, if setting is enabled.
 		fragment.rgb *= 1+saturate(maxLuma-newFragmentLuma) * HighlightType;
@@ -716,7 +717,7 @@ namespace CinematicDOF
 		}
 		fragment.rgb = average.rgb / (average.w + (average.w==0));
 		float newFragmentLuma = dot(fragment.rgb, lumaDotWeight);
-		fragment.rgb = lerp(fragment.rgb, maxColor, min(saturate(maxLuma-newFragmentLuma), HighlightNormalizingFactorFarPlane));
+		fragment.rgb = lerp(fragment.rgb, maxColor, min(saturate(dot(maxColor, lumaDotWeight)-newFragmentLuma), HighlightNormalizingFactorFarPlane));
 		newFragmentLuma = dot(fragment.rgb, lumaDotWeight);
 		// increase luma to the max luma found, if setting is enabled.
 		fragment.rgb *= (1+saturate(maxLuma-newFragmentLuma) * HighlightType);
