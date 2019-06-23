@@ -1116,10 +1116,11 @@ namespace CinematicDOF
 	< ui_tooltip = "Cinematic Depth of Field "
 			CINEMATIC_DOF_VERSION
 			"\n===========================================\n\n"
-			"Cinematic Depth of Field is a state of the art depth of field shader, offering fine-grained control over focusing,\n"
-			"blur aspects and highlights, using real-life lens aspects. Cinematic Depth of Field is based on various papers,\n"
-			"the references are included in the source code.\n\n"
-			"Cinematic Depth of Field was written by Frans Bouma, aka Otis / Infuse Project (Otis_Inf) and is part of OtisFX\n"
+			"Cinematic Depth of Field is a state of the art depth of field shader,\n"
+			"offering fine-grained control over focusing, blur aspects and highlights,\n"
+			"using real-life lens aspects. Cinematic Depth of Field is based on\n"
+			"various papers, of which the references are included in the source code.\n\n"
+			"Cinematic Depth of Field was written by Frans 'Otis_Inf' Bouma and is part of OtisFX\n"
 			"https://fransbouma.com | https://github.com/FransBouma/OtisFX"; >
 #endif
 	{
