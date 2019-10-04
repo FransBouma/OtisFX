@@ -32,6 +32,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // Version history:
+// 04-oct-2019:    v1.1.14: Fine-tuning of near plane blur using smaller tiles. 
 // 23-jun-2019:    v1.1.13: Cleanup of highlight code, reimplementing of luma boost / highlightblending. Removal of unnecessary controls.
 // 13-jun-2019:    v1.1.12: Bugfix in maxColor blending in near/far blur: no more dirty edges on large highlighted areas.
 // 10-jun-2019:	   v1.1.11: Added new weight calculation, added near-plane highlight normalization.
@@ -87,7 +88,7 @@
 
 namespace CinematicDOF
 {
-	#define CINEMATIC_DOF_VERSION "v1.1.13"
+	#define CINEMATIC_DOF_VERSION "v1.1.14b"
 
 // Uncomment line below for debug info / code / controls
 //	#define CD_DEBUG 1
@@ -334,16 +335,17 @@ namespace CinematicDOF
 
 	#define SENSOR_SIZE			0.024		// Height of the 35mm full-frame format (36mm x 24mm)
 	#define PI 					3.1415926535897932
-	#define TILE_SIZE			2			// amount of pixels left/right/up/down of the current pixel. So 4 is 9x9
+	#define TILE_SIZE			1			// amount of pixels left/right/up/down of the current pixel. So 4 is 9x9
+	#define TILE_MULTIPLY		1
 	#define GROUND_TRUTH_SCREEN_WIDTH	1920.0f
 	#define GROUND_TRUTH_SCREEN_HEIGHT	1200.0f
 	
 	texture texCDCurrentFocus		{ Width = 1; Height = 1; Format = R16F; };		// for storing the current focus depth obtained from the focus point
 	texture texCDPreviousFocus		{ Width = 1; Height = 1; Format = R16F; };		// for storing the previous frame's focus depth from texCDCurrentFocus.
 	texture texCDCoC				{ Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; Format = R16F; };
-	texture texCDCoCTileTmp			{ Width = BUFFER_WIDTH/(TILE_SIZE*2); Height = BUFFER_HEIGHT/(TILE_SIZE*2); Format = R16F; };	// R is MinCoC
-	texture texCDCoCTile			{ Width = BUFFER_WIDTH/(TILE_SIZE*2); Height = BUFFER_HEIGHT/(TILE_SIZE*2); Format = R16F; };	// R is MinCoC
-	texture texCDCoCTileNeighbor	{ Width = BUFFER_WIDTH/(TILE_SIZE*2); Height = BUFFER_HEIGHT/(TILE_SIZE*2); Format = R16F; };	// R is MinCoC
+	texture texCDCoCTileTmp			{ Width = BUFFER_WIDTH/(TILE_SIZE*TILE_MULTIPLY); Height = BUFFER_HEIGHT/(TILE_SIZE*TILE_MULTIPLY); Format = R16F; };	// R is MinCoC
+	texture texCDCoCTile			{ Width = BUFFER_WIDTH/(TILE_SIZE*TILE_MULTIPLY); Height = BUFFER_HEIGHT/(TILE_SIZE*TILE_MULTIPLY); Format = R16F; };	// R is MinCoC
+	texture texCDCoCTileNeighbor	{ Width = BUFFER_WIDTH/(TILE_SIZE*TILE_MULTIPLY); Height = BUFFER_HEIGHT/(TILE_SIZE*TILE_MULTIPLY); Format = R16F; };	// R is MinCoC
 	texture texCDCoCTmp1			{ Width = BUFFER_WIDTH/2; Height = BUFFER_HEIGHT/2; Format = R16F; };	// half res, single value
 	texture texCDCoCBlurred			{ Width = BUFFER_WIDTH/2; Height = BUFFER_HEIGHT/2; Format = RG16F; };	// half res, blurred CoC (r) and real CoC (g)
 	texture texCDBuffer1 			{ Width = BUFFER_WIDTH/2; Height = BUFFER_HEIGHT/2; Format = RGBA8; };
@@ -364,7 +366,7 @@ namespace CinematicDOF
 	sampler SamplerCDCoCBlurred			{ Texture = texCDCoCBlurred; };// MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
 	sampler SamplerCDCoCTileTmp			{ Texture = texCDCoCTileTmp; MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
 	sampler SamplerCDCoCTile			{ Texture = texCDCoCTile; MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
-	sampler SamplerCDCoCTileNeighbor	{ Texture = texCDCoCTileNeighbor; }; 
+	sampler SamplerCDCoCTileNeighbor	{ Texture = texCDCoCTileNeighbor; MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
 	
 	uniform float2 MouseCoords < source = "mousepoint"; >;
 	uniform bool LeftMouseDown < source = "mousebutton"; keycode = 0; toggle = false; >;
@@ -598,7 +600,7 @@ namespace CinematicDOF
 			float anglePerPoint = 6.28318530717958 / pointsOnRing;
 			float angle = anglePerPoint;
 			// no further weight needed, bleed all you want. 
-			float weight = lerp(ringIndex/blurInfo.numberOfRings, 1, smoothstep(0, 1, bokehBusyFactorToUse));
+			float weight = lerp(ringIndex/numberOfRings, 1, smoothstep(0, 1, bokehBusyFactorToUse));
 
 			for(float pointNumber = 0; pointNumber < pointsOnRing; pointNumber++)
 			{
@@ -610,11 +612,11 @@ namespace CinematicDOF
 				float4 tap = tex2Dlod(source, tapCoords);
 				// r contains blurred CoC, g contains original CoC. Original can be negative
 				float2 sampleRadii = tex2Dlod(SamplerCDCoCBlurred, tapCoords).rg;
+				float absSampleRadius = abs(sampleRadii.g);
 				average.rgb += tap.rgb * weight;
 				average.w += weight;
 				float3 gainedTap = AccentuateWhites(tap.rgb);
 				averageGained += gainedTap * weight;
-				float absSampleRadius = abs(sampleRadii.g);
 				float lumaSample = dot(gainedTap, lumaDotWeight) * absSampleRadius * (1-HighlightThresholdNearPlane);
 				maxLuma = max(maxLuma, lumaSample);
 				angle+=anglePerPoint;
@@ -624,7 +626,7 @@ namespace CinematicDOF
 		}
 		
 		average.rgb/=(average.w + (average.w ==0));
-		float alpha = saturate(2 * (fragmentRadiusToUse > 0.1 ? (fragmentRadii.g <=0 ? 2 : 1) * fragmentRadiusToUse : max(fragmentRadiusToUse, -fragmentRadii.g)));
+		float alpha = saturate(2.5 * (fragmentRadiusToUse > 0.1 ? (fragmentRadii.g <=0 ? 2 : 1) * fragmentRadiusToUse : max(fragmentRadiusToUse, -fragmentRadii.g)));
 		fragment = average;
 		fragment.a = alpha;
 #if CD_DEBUG
