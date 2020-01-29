@@ -32,6 +32,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // Version history:
+// 29-jan-2020:    v1.1.15: Added anamorphic angle selection
 // 04-oct-2019:    v1.1.14: Fine-tuning of near plane blur using smaller tiles. 
 // 23-jun-2019:    v1.1.13: Cleanup of highlight code, reimplementing of luma boost / highlightblending. Removal of unnecessary controls.
 // 13-jun-2019:    v1.1.12: Bugfix in maxColor blending in near/far blur: no more dirty edges on large highlighted areas.
@@ -88,7 +89,7 @@
 
 namespace CinematicDOF
 {
-	#define CINEMATIC_DOF_VERSION "v1.1.14b"
+	#define CINEMATIC_DOF_VERSION "v1.1.15"
 
 // Uncomment line below for debug info / code / controls
 //	#define CD_DEBUG 1
@@ -246,6 +247,19 @@ namespace CinematicDOF
 		ui_type = "drag";
 		ui_min = 0.00; ui_max = 1.00;
 		ui_tooltip = "The alignment factor for the anamorphic deformation. 0.0 means you get evenly rotated\nellipses around the center of the screen, 1.0 means all bokeh highlights are\naligned vertically.";
+		ui_step = 0.01;
+	> = 0.0;
+	uniform bool HighlightAnamorphicUseFixedAngle <
+		ui_category = "Highlight tweaking, anamorphism";
+		ui_label = "Use anamorphic rotation angle";
+		ui_tooltip = "If true, will rotate all highlights over the angle specified with 'Anamorphic rotation angle' instead of around the center of the screen.";
+	> = false;
+	uniform float HighlightAnamorphicFixedAngleValue <
+		ui_category = "Highlight tweaking, anamorphism";
+		ui_label="Anamorphic rotation angle";
+		ui_type = "drag";
+		ui_min = 0.00; ui_max = 3.1415926535897932;
+		ui_tooltip = "If 'Use anamorphic rotation angle' is set to true, the highlights will be rotated with\nthis angle instead of being rotated around the center of the screen.";
 		ui_step = 0.01;
 	> = 0.0;
 	uniform float HighlightGainFarPlane <
@@ -429,7 +443,9 @@ namespace CinematicDOF
 		float2 refVector = normalize(float2(-0.5, 0));
 		float2 sincosFactor = float2(0,0);
 		// calculate the angle between the pixelvector and the ref vector and grab the sin/cos for that angle for the rotation matrix.
-		sincos(atan2(pixelVector.y, pixelVector.x) - atan2(refVector.y, refVector.x), sincosFactor.x, sincosFactor.y);
+		float angleToUse = HighlightAnamorphicUseFixedAngle ? HighlightAnamorphicFixedAngleValue 
+															: atan2(pixelVector.y, pixelVector.x) - atan2(refVector.y, refVector.x);
+		sincos(angleToUse, sincosFactor.x, sincosFactor.y);
 		return float2x2(sincosFactor.y, sincosFactor.x, -sincosFactor.x, sincosFactor.y);
 	}
 	
