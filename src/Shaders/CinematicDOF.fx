@@ -32,7 +32,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // Version history:
-// 29-jan-2020:    v1.1.15: Added anamorphic angle selection
+// 03-feb-2020:    v1.1.15: Experimental near plane edge blur improvements.
 // 04-oct-2019:    v1.1.14: Fine-tuning of near plane blur using smaller tiles. 
 // 23-jun-2019:    v1.1.13: Cleanup of highlight code, reimplementing of luma boost / highlightblending. Removal of unnecessary controls.
 // 13-jun-2019:    v1.1.12: Bugfix in maxColor blending in near/far blur: no more dirty edges on large highlighted areas.
@@ -89,10 +89,10 @@
 
 namespace CinematicDOF
 {
-	#define CINEMATIC_DOF_VERSION "v1.1.15"
+	#define CINEMATIC_DOF_VERSION "v1.1.15b"
 
 // Uncomment line below for debug info / code / controls
-//	#define CD_DEBUG 1
+	#define CD_DEBUG 1
 
 	//////////////////////////////////////////////////
 	//
@@ -249,19 +249,6 @@ namespace CinematicDOF
 		ui_tooltip = "The alignment factor for the anamorphic deformation. 0.0 means you get evenly rotated\nellipses around the center of the screen, 1.0 means all bokeh highlights are\naligned vertically.";
 		ui_step = 0.01;
 	> = 0.0;
-	uniform bool HighlightAnamorphicUseFixedAngle <
-		ui_category = "Highlight tweaking, anamorphism";
-		ui_label = "Use anamorphic rotation angle";
-		ui_tooltip = "If true, will rotate all highlights over the angle specified with 'Anamorphic rotation angle' instead of around the center of the screen.";
-	> = false;
-	uniform float HighlightAnamorphicFixedAngleValue <
-		ui_category = "Highlight tweaking, anamorphism";
-		ui_label="Anamorphic rotation angle";
-		ui_type = "drag";
-		ui_min = 0.00; ui_max = 3.1415926535897932;
-		ui_tooltip = "If 'Use anamorphic rotation angle' is set to true, the highlights will be rotated with\nthis angle instead of being rotated around the center of the screen.";
-		ui_step = 0.01;
-	> = 0.0;
 	uniform float HighlightGainFarPlane <
 		ui_category = "Highlight tweaking, far plane";
 		ui_label="Highlight gain";
@@ -377,7 +364,7 @@ namespace CinematicDOF
 	sampler SamplerCDBuffer5 			{ Texture = texCDBuffer5; };
 	sampler SamplerCDCoC				{ Texture = texCDCoC; MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
 	sampler SamplerCDCoCTmp1			{ Texture = texCDCoCTmp1; MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
-	sampler SamplerCDCoCBlurred			{ Texture = texCDCoCBlurred; };// MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
+	sampler SamplerCDCoCBlurred			{ Texture = texCDCoCBlurred; MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
 	sampler SamplerCDCoCTileTmp			{ Texture = texCDCoCTileTmp; MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
 	sampler SamplerCDCoCTile			{ Texture = texCDCoCTile; MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
 	sampler SamplerCDCoCTileNeighbor	{ Texture = texCDCoCTileNeighbor; MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
@@ -443,9 +430,7 @@ namespace CinematicDOF
 		float2 refVector = normalize(float2(-0.5, 0));
 		float2 sincosFactor = float2(0,0);
 		// calculate the angle between the pixelvector and the ref vector and grab the sin/cos for that angle for the rotation matrix.
-		float angleToUse = HighlightAnamorphicUseFixedAngle ? HighlightAnamorphicFixedAngleValue 
-															: atan2(pixelVector.y, pixelVector.x) - atan2(refVector.y, refVector.x);
-		sincos(angleToUse, sincosFactor.x, sincosFactor.y);
+		sincos(atan2(pixelVector.y, pixelVector.x) - atan2(refVector.y, refVector.x), sincosFactor.x, sincosFactor.y);
 		return float2x2(sincosFactor.y, sincosFactor.x, -sincosFactor.x, sincosFactor.y);
 	}
 	
@@ -617,7 +602,6 @@ namespace CinematicDOF
 			float angle = anglePerPoint;
 			// no further weight needed, bleed all you want. 
 			float weight = lerp(ringIndex/numberOfRings, 1, smoothstep(0, 1, bokehBusyFactorToUse));
-
 			for(float pointNumber = 0; pointNumber < pointsOnRing; pointNumber++)
 			{
 				sincos(angle, pointOffset.y, pointOffset.x);
@@ -627,13 +611,12 @@ namespace CinematicDOF
 				float4 tapCoords = float4(blurInfo.texcoord + (pointOffset * currentRingRadiusCoords), 0, 0);
 				float4 tap = tex2Dlod(source, tapCoords);
 				// r contains blurred CoC, g contains original CoC. Original can be negative
-				float2 sampleRadii = tex2Dlod(SamplerCDCoCBlurred, tapCoords).rg;
-				float absSampleRadius = abs(sampleRadii.g);
+				float blurredSampleRadius = tex2Dlod(SamplerCDCoCBlurred, tapCoords).r;
 				average.rgb += tap.rgb * weight;
 				average.w += weight;
 				float3 gainedTap = AccentuateWhites(tap.rgb);
 				averageGained += gainedTap * weight;
-				float lumaSample = dot(gainedTap, lumaDotWeight) * absSampleRadius * (1-HighlightThresholdNearPlane);
+				float lumaSample = dot(gainedTap, lumaDotWeight) * saturate(blurredSampleRadius) * (1-HighlightThresholdNearPlane);
 				maxLuma = max(maxLuma, lumaSample);
 				angle+=anglePerPoint;
 			}
@@ -642,8 +625,8 @@ namespace CinematicDOF
 		}
 		
 		average.rgb/=(average.w + (average.w ==0));
-		float alpha = saturate(2.5 * (fragmentRadiusToUse > 0.1 ? (fragmentRadii.g <=0 ? 2 : 1) * fragmentRadiusToUse : max(fragmentRadiusToUse, -fragmentRadii.g)));
-		fragment = average;
+		float alpha = saturate((min(2.5, NearPlaneMaxBlur) + 0.4) * (fragmentRadiusToUse > 0.1 ? (fragmentRadii.g <=0 ? 2 : 1) * fragmentRadiusToUse : max(fragmentRadiusToUse, -fragmentRadii.g)));
+		fragment.rgb = average.rgb;
 		fragment.a = alpha;
 #if CD_DEBUG
 		if(ShowNearPlaneAlpha)
@@ -1011,7 +994,7 @@ namespace CinematicDOF
 		// from tmp1 to tmp2. Merge original CoC into g.
 		fragment = float2(PerformSingleValueGaussianBlur(SamplerCDCoCTmp1, texcoord, 
 														 float2(0.0, ReShade::PixelSize.y * (ReShade::ScreenSize.y/GROUND_TRUTH_SCREEN_HEIGHT)), false), 
-						  tex2D(SamplerCDCoC, texcoord).x);
+						  tex2D(SamplerCDCoCTileNeighbor, texcoord).x);
 	}
 	
 	// Pixel shader which combines 2 half-res sources to a full res output. From texCDBuffer1 & 2 to texCDBuffer4.
