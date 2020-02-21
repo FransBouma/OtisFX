@@ -89,10 +89,10 @@
 
 namespace CinematicDOF
 {
-	#define CINEMATIC_DOF_VERSION "v1.1.15b"
+	#define CINEMATIC_DOF_VERSION "v1.1.15"
 
 // Uncomment line below for debug info / code / controls
-	#define CD_DEBUG 1
+//	#define CD_DEBUG 1
 
 	//////////////////////////////////////////////////
 	//
@@ -142,7 +142,7 @@ namespace CinematicDOF
 		ui_min = 10; ui_max = 300.0;
 		ui_step = 1.0;
 		ui_tooltip = "Focal length of the used lens. The longer the focal length, the narrower the\ndepth of field and thus the more is out of focus. For portraits, start with 120 or 150.";
-	> = 120.00;
+	> = 100.00;
 	uniform float FNumber <
 		ui_category = "Focusing";
 		ui_label = "Aperture (f-number)";
