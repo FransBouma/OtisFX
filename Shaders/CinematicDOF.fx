@@ -32,6 +32,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // Version history:
+// 15-mar-2020:    v1.1.16: Dithering added for low-luma areas to avoid banding. (Contributed by Prod80)
 // 03-feb-2020:    v1.1.15: Experimental near plane edge blur improvements.
 // 04-oct-2019:    v1.1.14: Fine-tuning of near plane blur using smaller tiles. 
 // 23-jun-2019:    v1.1.13: Cleanup of highlight code, reimplementing of luma boost / highlightblending. Removal of unnecessary controls.
@@ -71,6 +72,7 @@
 // Thanks to Daodan for the crosshair code in the focus helper.
 // 9 tap tent filter is from KinoBokeh Copyright (C) 2015 Keijiro Takahashi. MIT licensed. See file below for details.
 //       Ref:  https://github.com/keijiro/KinoBokeh/blob/master/Assets/Kino/Bokeh/Shader/Composition.cginc
+// Thanks to Prod80 for contributing dithering in combiner to avoid banding in low-luma blurred areas. 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // References:
 //
@@ -89,7 +91,7 @@
 
 namespace CinematicDOF
 {
-	#define CINEMATIC_DOF_VERSION "v1.1.15"
+	#define CINEMATIC_DOF_VERSION "v1.1.16"
 
 // Uncomment line below for debug info / code / controls
 //	#define CD_DEBUG 1
@@ -361,7 +363,7 @@ namespace CinematicDOF
 	texture texCDBuffer3 			{ Width = BUFFER_WIDTH/2; Height = BUFFER_HEIGHT/2; Format = RGBA16F; };// needed for tentfilter as far/near have to be preserved in buffer 1 and 2
 	texture texCDBuffer4 			{ Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; Format = RGBA16F; }; 	// Full res upscale buffer
 	texture texCDBuffer5 			{ Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; Format = RGBA16F; }; 	// Full res upscale buffer. We need 2 as post smooth needs 2
-    texture texNoise                < source = "monochrome_gaussnoise.png"; > { Width = 512; Height = 512; Format = RGBA8; };
+	texture texCDNoise				< source = "monochrome_gaussnoise.png"; > { Width = 512; Height = 512; Format = RGBA8; };
 
 	sampler	SamplerCDCurrentFocus		{ Texture = texCDCurrentFocus; };
 	sampler SamplerCDPreviousFocus		{ Texture = texCDPreviousFocus; };
@@ -376,8 +378,8 @@ namespace CinematicDOF
 	sampler SamplerCDCoCTileTmp			{ Texture = texCDCoCTileTmp; MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
 	sampler SamplerCDCoCTile			{ Texture = texCDCoCTile; MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
 	sampler SamplerCDCoCTileNeighbor	{ Texture = texCDCoCTileNeighbor; MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
-    sampler samplerNoise                { Texture = texNoise; MipFilter = POINT; MinFilter = POINT; MagFilter = POINT; AddressU = WRAP; AddressV = WRAP; AddressW = WRAP;};
-	
+	sampler SamplerCDNoise				{ Texture = texCDNoise; MipFilter = POINT; MinFilter = POINT; MagFilter = POINT; AddressU = WRAP; AddressV = WRAP; AddressW = WRAP;};
+
 	uniform float2 MouseCoords < source = "mousepoint"; >;
 	uniform bool LeftMouseDown < source = "mousebutton"; keycode = 0; toggle = false; >;
 
@@ -1083,13 +1085,13 @@ namespace CinematicDOF
 #endif
 		fragment = PerformFullFragmentGaussianBlur(SamplerCDBuffer5, focusInfo.texcoord, float2(0.0, BUFFER_PIXEL_SIZE.y));
 		float4 originalFragment = tex2D(SamplerCDBuffer4, focusInfo.texcoord);
-        // Dither
-        float2 uv = float2( BUFFER_WIDTH, BUFFER_HEIGHT) / float2( 512.0f, 512.0f ); // create multiplier on texcoord so that we can use 1px size reads on gaussian noise texture (since much smaller than screen)
-        uv.xy = uv.xy * texcoord.xy;
-        float noise = tex2D( samplerNoise, uv ).x; // read, uv is scaled, sampler is set to tile noise texture (WRAP)
-        fragment.xyz = saturate( fragment.xyz + lerp( -0.5/255, 0.5/255, noise )); // apply dither
+		// Dither
+		float2 uv = float2(BUFFER_WIDTH, BUFFER_HEIGHT) / float2( 512.0f, 512.0f ); // create multiplier on texcoord so that we can use 1px size reads on gaussian noise texture (since much smaller than screen)
+		uv.xy = uv.xy * texcoord.xy;
+		float noise = tex2D(SamplerCDNoise, uv).x; // read, uv is scaled, sampler is set to tile noise texture (WRAP)
+		fragment.xyz = saturate(fragment.xyz + lerp( -0.5/255.0, 0.5/255.0, noise)); // apply dither
 		// End Dither
-        float coc = abs(tex2Dlod(SamplerCDCoC, float4(focusInfo.texcoord, 0, 0)).r);
+		float coc = abs(tex2Dlod(SamplerCDCoC, float4(focusInfo.texcoord, 0, 0)).r);
 		fragment.rgb = lerp(originalFragment.rgb, fragment.rgb, saturate(coc < length(BUFFER_PIXEL_SIZE) ? 0 : 4 * coc));
 		fragment.w = 1.0;
 		
