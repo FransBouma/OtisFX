@@ -1,12 +1,12 @@
 # OtisFX
-A small set of effects for [Reshade](http://reshade.me). 
+A small set of effects for [Reshade](https://reshade.me). 
 
 Most of these shaders are in the [official reshade shader library](https://github.com/crosire/reshade-shaders), in some form/version but that library is tied to a 
 given version of reshade and modified to use controls which are less precise or not compatible with e.g. v3. So I forked my shaders and shaders from others 
 not in the reshade repo I use myself to this repository. 
 
 ### Prerequisites
-You should have [Reshade](http://reshade.me) v3.4.x or higher and at least reshade.fxh present in the `reshade-shaders\shaders` folder
+You should have [Reshade](https://reshade.me) v3.4.x or higher and at least reshade.fxh present in the `reshade-shaders\shaders` folder
 
 ### How to install
 Download the zip using the button on the right which says 'Download ZIP'. This will give you a file called 'Master.zip', which contains all code. 

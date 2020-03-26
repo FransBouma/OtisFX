@@ -32,6 +32,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // Version history:
+// 26-mar-2020:    v1.1.17: FreeStyle support added (not yet ansel superres compatible). Fixed issue with far plane highlight causing near plane edge pixels getting highlighted.
 // 15-mar-2020:    v1.1.16: Dithering added for low-luma areas to avoid banding. (Contributed by Prod80)
 // 03-feb-2020:    v1.1.15: Experimental near plane edge blur improvements.
 // 04-oct-2019:    v1.1.14: Fine-tuning of near plane blur using smaller tiles. 
@@ -91,7 +92,7 @@
 
 namespace CinematicDOF
 {
-	#define CINEMATIC_DOF_VERSION "v1.1.16"
+	#define CINEMATIC_DOF_VERSION "v1.1.17"
 
 // Uncomment line below for debug info / code / controls
 //	#define CD_DEBUG 1
@@ -108,11 +109,19 @@ namespace CinematicDOF
 		ui_label = "Use auto-focus";
 		ui_tooltip = "If enabled it will make the shader focus on the point specified as 'Auto-focus point',\notherwise it will put the focus plane at the depth specified in 'Manual-focus plane'.";
 	> = true;
+#if __RESHADE_FXC__		// Freestyle
+	uniform bool ShowFocusingOverlay <
+		ui_category = "Focusing";
+		ui_label = "Show focusing overlay";
+		ui_tooltip = "Enables the out-of-focus plane overlay\nwhich helps with fine-tuning the focusing.";
+	> = false;
+#else
 	uniform bool UseMouseDrivenAutoFocus <
 		ui_category = "Focusing";
 		ui_label = "Use mouse-driven auto-focus";
 		ui_tooltip = "Enables mouse driven auto-focus. If enabled, and 'Use auto-focus' is enabled, the\nauto-focus point is read from the mouse coordinates, otherwise the 'Auto-focus point' is used.";
 	> = true;
+#endif
 	uniform float2 AutoFocusPoint <
 		ui_category = "Focusing";
 		ui_label = "Auto-focus point";
@@ -129,14 +138,31 @@ namespace CinematicDOF
 		ui_step = 0.01;
 		ui_tooltip = "The speed the shader will transition between different focus points when using auto-focus.\n0.001 means very slow, 1.0 means instantly. Only used if 'Use auto-focus' is enabled.";
 	> = 0.2;
+#if __RESHADE_FXC__		// Freestyle
+	uniform float ManualFocusPlaneMaxRange <
+		ui_category = "Focusing";
+		ui_label= "Manual-focus plane max range";
+		ui_type = "drag";
+		ui_min = 10; ui_max = 150;
+		ui_step = 1;
+		ui_tooltip = "The depth of focal plane related to the camera when 'Use auto-focus' is off.\n'1.0' means the at the horizon. 0 means at the camera.\nOnly used if 'Use auto-focus' is disabled.";
+	> = 10;
+#endif
 	uniform float ManualFocusPlane <
 		ui_category = "Focusing";
 		ui_label= "Manual-focus plane";
 		ui_type = "drag";
+#if __RESHADE_FXC__		// Freestyle
+		ui_min = 0.000; ui_max = 1.0;
+		ui_step = 0.001;
+		ui_tooltip = "The depth of focal plane related to the camera when 'Use auto-focus' is off.\n'1.0' means the ManualFocusPlaneMaxRange. 0 means at the camera.\nOnly used if 'Use auto-focus' is disabled.";
+	> = 0.01;
+#else
 		ui_min = 0.100; ui_max = 150.00;
 		ui_step = 0.01;
 		ui_tooltip = "The depth of focal plane related to the camera when 'Use auto-focus' is off.\nOnly used if 'Use auto-focus' is disabled.";
 	> = 10.00;
+#endif
 	uniform float FocalLength <
 		ui_category = "Focusing";
 		ui_label = "Focal length (mm)";
@@ -153,6 +179,7 @@ namespace CinematicDOF
 		ui_step = 0.1;
 		ui_tooltip = "The f-number (also known as f-stop) to use. The higher the number, the wider\nthe depth of field, meaning the more is in-focus and thus the less is out of focus.\nFor portraits, start with 2.8.";
 	> = 2.8;
+#ifndef __RESHADE_FXC__		// Reshade
 	// ------------- FOCUSING, OVERLAY
 	uniform bool ShowOutOfFocusPlaneOnMouseDown <
 		ui_category = "Focusing, overlay";
@@ -184,7 +211,7 @@ namespace CinematicDOF
 		ui_type = "color";
 		ui_tooltip = "Specifies the color of the crosshair for the auto-focus.\nAuto-focus must be enabled";
 	> = float4(1.0, 0.0, 1.0, 1.0);
-	
+#endif
 	// ------------- BLUR TWEAKING
 	uniform float FarPlaneMaxBlur <
 		ui_category = "Blur tweaking";
@@ -253,7 +280,11 @@ namespace CinematicDOF
 	> = 0.0;
 	uniform float HighlightGainFarPlane <
 		ui_category = "Highlight tweaking, far plane";
+#if __RESHADE_FXC__		// Freestyle
+		ui_label="Highlight gain far plane";
+#else
 		ui_label="Highlight gain";
+#endif
 		ui_type = "drag";
 		ui_min = 0.00; ui_max = 5.00;
 		ui_tooltip = "The gain for highlights in the far plane. The higher the more a highlight gets\nbrighter. Tweak this in tandem with the Highlight threshold. Best results are\nachieved with bright spots in dark(er) backgrounds.";
@@ -261,7 +292,11 @@ namespace CinematicDOF
 	> = 0.500;
 	uniform float HighlightThresholdFarPlane <
 		ui_category = "Highlight tweaking, far plane";
+#if __RESHADE_FXC__		// Freestyle
+		ui_label="Highlight threshold far plane";
+#else
 		ui_label="Highlight threshold";
+#endif
 		ui_type = "drag";
 		ui_min = 0.00; ui_max = 1.00;
 		ui_tooltip = "The threshold for the source pixels. Pixels with a luminosity above this threshold\nwill be highlighted. Raise this value to only keep the highlights you want.\nWhen highlight type is Twinkle circlets, set the threshold at 0.5 or higher\nfor blur without highlights.";
@@ -269,7 +304,11 @@ namespace CinematicDOF
 	> = 0.0;
 	uniform float HighlightGainNearPlane <
 		ui_category = "Highlight tweaking, near plane";
+#if __RESHADE_FXC__		// Freestyle
+		ui_label="Highlight gain near plane";
+#else
 		ui_label="Highlight gain";
+#endif
 		ui_type = "drag";
 		ui_min = 0.00; ui_max = 5.00;
 		ui_tooltip = "The gain for highlights in the near plane. The higher the more a highlight gets\nbrighter. Tweak this in tandem with the Highlight threshold. Best results are\nachieved with bright spots in dark(er) foregrounds.";
@@ -277,7 +316,11 @@ namespace CinematicDOF
 	> = 0.200;
 	uniform float HighlightThresholdNearPlane <
 		ui_category = "Highlight tweaking, near plane";
+#if __RESHADE_FXC__		// Freestyle
+		ui_label="Highlight threshold near plane";
+#else
 		ui_label="Highlight threshold";
+#endif
 		ui_type = "drag";
 		ui_min = 0.00; ui_max = 1.00;
 		ui_tooltip = "The threshold for the source pixels. Pixels with a luminosity above this threshold\nwill be highlighted. Raise this value to only keep the highlights you want.\nWhen highlight type is Twinkle circlets, set the threshold at 0.5 or higher\nfor blur without highlights.";
@@ -329,6 +372,9 @@ namespace CinematicDOF
 	uniform bool ShowNearPlaneBlurred <
 		ui_category = "Debugging";
 	> = false;
+	uniform bool ShowOnlyFarPlaneBlurred <
+		ui_category = "Debugging";
+	> = false;
 #endif
 	//////////////////////////////////////////////////
 	//
@@ -336,6 +382,9 @@ namespace CinematicDOF
 	//
 	//////////////////////////////////////////////////
 
+#if __RESHADE_FXC__		// Freestyle
+	#define OUT_OF_FOCUS_PLANE_COLORTRANSPARENCY 	0.5
+#endif
 	#define SENSOR_SIZE			0.024		// Height of the 35mm full-frame format (36mm x 24mm)
 	#define PI 					3.1415926535897932
 	#define TILE_SIZE			1			// amount of pixels left/right/up/down of the current pixel. So 4 is 9x9
@@ -380,8 +429,10 @@ namespace CinematicDOF
 	sampler SamplerCDCoCTileNeighbor	{ Texture = texCDCoCTileNeighbor; MagFilter = POINT; MinFilter = POINT; MipFilter = POINT;};
 	sampler SamplerCDNoise				{ Texture = texCDNoise; MipFilter = POINT; MinFilter = POINT; MagFilter = POINT; AddressU = WRAP; AddressV = WRAP; AddressW = WRAP;};
 
+#ifndef __RESHADE_FXC__		// Freestyle
 	uniform float2 MouseCoords < source = "mousepoint"; >;
 	uniform bool LeftMouseDown < source = "mousebutton"; keycode = 0; toggle = false; >;
+#endif
 
 	// simple struct for the Focus vertex shader.
 	struct VSFOCUSINFO
@@ -604,7 +655,7 @@ namespace CinematicDOF
 		float2 ringRadiusDeltaCoords = BUFFER_PIXEL_SIZE * (nearPlaneBlurInPixels / (numberOfRings-1));
 		float pointsOnRing = pointsFirstRing;
 		float2 currentRingRadiusCoords = ringRadiusDeltaCoords;
-		float maxLuma = dot(averageGained, lumaDotWeight) * fragmentRadii.g * (1-HighlightThresholdNearPlane);
+		float maxLuma = dot(averageGained, lumaDotWeight) * -fragmentRadii.g * (1-HighlightThresholdNearPlane);
 		float4 anamorphicFactors = CalculateAnamorphicFactor(blurInfo.texcoord - 0.5); // xy are up vector, zw are right vector
 		float2x2 anamorphicRotationMatrix = CalculateAnamorphicRotationMatrix(blurInfo.texcoord);
 		for(float ringIndex = 0; ringIndex < numberOfRings; ringIndex++)
@@ -622,7 +673,8 @@ namespace CinematicDOF
 				float4 tapCoords = float4(blurInfo.texcoord + (pointOffset * currentRingRadiusCoords), 0, 0);
 				float4 tap = tex2Dlod(source, tapCoords);
 				// r contains blurred CoC, g contains original CoC. Original can be negative
-				float blurredSampleRadius = tex2Dlod(SamplerCDCoCBlurred, tapCoords).r;
+				float2 sampleRadii = tex2Dlod(SamplerCDCoCBlurred, tapCoords).rb;
+				float blurredSampleRadius = sampleRadii.r;
 				average.rgb += tap.rgb * weight;
 				average.w += weight;
 				float3 gainedTap = AccentuateWhites(tap.rgb);
@@ -668,7 +720,7 @@ namespace CinematicDOF
 		float4 fragment = tex2Dlod(source, float4(blurInfo.texcoord, 0, 0));
 		float fragmentRadius = tex2Dlod(SamplerCDCoC, float4(blurInfo.texcoord, 0, 0)).r;
 		// we'll not process near plane fragments as they're processed in a separate pass. 
-		if(fragmentRadius < 0)
+		if(fragmentRadius < 0 || blurInfo.farPlaneMaxBlurInPixels <=0)
 		{
 			// near plane fragment, will be done in near plane pass 
 			return fragment;
@@ -703,10 +755,10 @@ namespace CinematicDOF
 				float weight = (sampleRadius >=0) * ringWeight * CalculateSampleWeight(sampleRadius * FarPlaneMaxBlur, ringDistance);
 				average.rgb += tap.rgb * weight;
 				average.w += weight;
-				float3 gainedTap = AccentuateWhites(tap.rgb);
+				float3 gainedTap = sampleRadius >= 0 ? AccentuateWhites(tap.rgb) : tap.rgb;
 				averageGained += gainedTap * weight;
-				float lumaSample = dot(gainedTap, lumaDotWeight) * sampleRadius * (1-HighlightThresholdFarPlane);
-				maxLuma = max(maxLuma, lumaSample);
+				float lumaSample = saturate(dot(gainedTap, lumaDotWeight) * sampleRadius * (1-HighlightThresholdFarPlane));
+				maxLuma = sampleRadius > 0 ? max(maxLuma, lumaSample) : maxLuma;
 				angle+=anglePerPoint;
 			}
 			pointsOnRing+=pointsFirstRing;
@@ -933,9 +985,15 @@ namespace CinematicDOF
 	// Pixel shader which determines the focus depth for the current frame, which will be stored in the currentfocus texture.
 	void PS_DetermineCurrentFocus(float4 vpos : SV_Position, float2 texcoord : TEXCOORD, out float fragment : SV_Target0)
 	{
+#if __RESHADE_FXC__		// Freestyle
+		float manualFocusPlaneValue = ManualFocusPlane * ManualFocusPlaneMaxRange;
+		fragment = UseAutoFocus ? lerp(tex2D(SamplerCDPreviousFocus, float2(0, 0)).r, ReShade::GetLinearizedDepth(AutoFocusPoint), AutoFocusTransitionSpeed) 
+								: (manualFocusPlaneValue / 1000);
+#else
 		float2 autoFocusPointToUse = UseMouseDrivenAutoFocus ? MouseCoords * BUFFER_PIXEL_SIZE : AutoFocusPoint;
 		fragment = UseAutoFocus ? lerp(tex2D(SamplerCDPreviousFocus, float2(0, 0)).r, ReShade::GetLinearizedDepth(autoFocusPointToUse), AutoFocusTransitionSpeed) 
 								: (ManualFocusPlane / 1000);
+#endif
 	}
 	
 	// Pixel shader which copies the single value of the current focus texture to the previous focus texture so it's preserved for the next frame.
@@ -970,7 +1028,7 @@ namespace CinematicDOF
 	// and [Nilsson2012] (blurred CoC).
 	void PS_NearBokehBlur(VSDISCBLURINFO blurInfo, out float4 fragment : SV_Target0)
 	{
-		fragment = PerformNearPlaneDiscBlur(blurInfo, SamplerCDBuffer2);
+		fragment = PerformNearPlaneDiscBlur(blurInfo, ReShade::BackBuffer);//SamplerCDBuffer2);
 	}
 	
 	// Pixel shader which performs the CoC tile creation (horizontal gather of min CoC)
@@ -1022,6 +1080,12 @@ namespace CinematicDOF
 		float blendFactor = (realCoC > 0.1) ? 1 : smoothstep(0, 1, (realCoC / 0.1));
 		fragment = lerp(originalFragment, farFragment, blendFactor);
 		fragment.rgb = lerp(fragment.rgb, nearFragment.rgb, nearFragment.a * (NearPlaneMaxBlur != 0));
+#if CD_DEBUG
+		if(ShowOnlyFarPlaneBlurred)
+		{
+			fragment = farFragment;
+		}
+#endif
 		fragment.a = 1.0;
 	}
 
@@ -1098,6 +1162,14 @@ namespace CinematicDOF
 #if __RENDERER__ <= 0x9300 	// doing focusing in vertex shaders in dx9 doesn't work for auto-focus, so we'll just do it in the pixel shader instead
 		FillFocusInfoData(focusInfo);
 #endif
+#if __RESHADE_FXC__		// Freestyle
+		bool ShowOutOfFocusPlaneOnMouseDown = ShowFocusingOverlay;
+		bool LeftMouseDown = true;
+		float3 OutOfFocusPlaneColor = float3(0.8, 0.8, 0.8);
+		float3 FocusPlaneColor = float3(0.0, 0.0, 1.0);
+		float OutOfFocusPlaneColorTransparency = OUT_OF_FOCUS_PLANE_COLORTRANSPARENCY;
+		float4 FocusCrosshairColor = float4(1.0, 0.0, 1.0, 1.0);
+#endif
 		if(ShowOutOfFocusPlaneOnMouseDown && LeftMouseDown)
 		{
 			float depthPixelInMM = ReShade::GetLinearizedDepth(focusInfo.texcoord) * 1000.0 * 1000.0;
@@ -1116,7 +1188,11 @@ namespace CinematicDOF
 			fragment = lerp(fragment, colorToBlend, OutOfFocusPlaneColorTransparency);
 			if(UseAutoFocus)
 			{
+#if __RESHADE_FXC__		// Freestyle
+				float2 focusPointCoords = AutoFocusPoint;
+#else
 				float2 focusPointCoords = UseMouseDrivenAutoFocus ? MouseCoords * BUFFER_PIXEL_SIZE : AutoFocusPoint;
+#endif
 				fragment = lerp(fragment, FocusCrosshairColor, FocusCrosshairColor.w * saturate(exp(-BUFFER_WIDTH * length(focusInfo.texcoord - float2(focusPointCoords.x, focusInfo.texcoord.y)))));
 				fragment = lerp(fragment, FocusCrosshairColor, FocusCrosshairColor.w * saturate(exp(-BUFFER_HEIGHT * length(focusInfo.texcoord - float2(focusInfo.texcoord.x, focusPointCoords.y)))));
 			}
