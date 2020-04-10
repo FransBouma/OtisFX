@@ -32,7 +32,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // 
 // Version History
-// 10-apr-2020:		v0.9: First release
+// 10-apr-2020:		v1.0: First release
 //
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,9 +42,9 @@
 namespace DirectionalDepthBlur
 {
 // Uncomment line below for debug info / code / controls
-	#define CD_DEBUG 1
+//	#define CD_DEBUG 1
 	
-	#define DIRECTIONAL_DEPTH_BLUR_VERSION "v0.9"
+	#define DIRECTIONAL_DEPTH_BLUR_VERSION "v1.0"
 
 	//////////////////////////////////////////////////
 	//
@@ -52,13 +52,13 @@ namespace DirectionalDepthBlur
 	//
 	//////////////////////////////////////////////////
 
-	uniform float ManualFocusPlane <
+	uniform float FocusPlane <
 		ui_category = "Focusing";
-		ui_label= "Manual-focus plane";
+		ui_label= "Focus plane";
 		ui_type = "drag";
 		ui_min = 0.001; ui_max = 1.000;
 		ui_step = 0.001;
-		ui_tooltip = "The depth of focal plane related to the camera";
+		ui_tooltip = "The depth of the plane where the blur starts, related to the camera";
 	> = 0.010;
 	uniform float FocusRange <
 		ui_category = "Focusing";
@@ -66,16 +66,16 @@ namespace DirectionalDepthBlur
 		ui_type = "drag";
 		ui_min = 0.001; ui_max = 1.000;
 		ui_step = 0.001;
-		ui_tooltip = "The range around the focus plane that's more or less not blurred. 1.0 is the ManualFocusPlaneMaxRange.";
+		ui_tooltip = "The range around the focus plane that's more or less not blurred.\n1.0 is the FocusPlaneMaxRange.";
 	> = 0.001;
-	uniform float ManualFocusPlaneMaxRange <
+	uniform float FocusPlaneMaxRange <
 		ui_category = "Focusing";
-		ui_label= "Manual-focus plane max range";
+		ui_label= "Focus plane max range";
 		ui_type = "drag";
 		ui_min = 10; ui_max = 300;
 		ui_step = 1;
-		ui_tooltip = "The depth of focal plane related to the camera when 'Use auto-focus' is off.\n'1.0' means the at the horizon. 0 means at the camera.\nOnly used if 'Use auto-focus' is disabled.";
-	> = 10;
+		ui_tooltip = "The max range Focus Plane for when Focus Plane is 1.0.\n1000 is the horizon.";
+	> = 150;
 	uniform float BlurAngle <
 		ui_category = "Blur tweaking";
 		ui_label="Blur angle";
@@ -90,7 +90,7 @@ namespace DirectionalDepthBlur
 		ui_type = "drag";
 		ui_min = 0.000; ui_max = 1.0;
 		ui_step = 0.001;
-		ui_tooltip = "The length of the blur per pixel. 1.0 is the entire screen.";
+		ui_tooltip = "The length of the blur strokes per pixel. 1.0 is the entire screen.";
 	> = 0.001;
 	uniform float BlurQuality <
 		ui_category = "Blur tweaking";
@@ -98,7 +98,7 @@ namespace DirectionalDepthBlur
 		ui_type = "drag";
 		ui_min = 0.01; ui_max = 1.0;
 		ui_step = 0.01;
-		ui_tooltip = "The quality of the blur. 1.0 means all pixels in the length are read,\n0.5 means half of them are read.";
+		ui_tooltip = "The quality of the blur. 1.0 means all pixels in the blur length are\nread, 0.5 means half of them are read.";
 	> = 0.5;
 	uniform float ScaleFactor <
 		ui_category = "Blur tweaking";
@@ -107,6 +107,36 @@ namespace DirectionalDepthBlur
 		ui_min = 0.010; ui_max = 1.000;
 		ui_step = 0.001;
 		ui_tooltip = "The scale factor for the pixels to blur. Lower values downscale the\nsource frame and will result in wider blur strokes.";
+	> = 1.000;
+	uniform int BlurType < 
+		ui_category = "Blur tweaking";
+		ui_type = "combo";
+		ui_min= 0; ui_max=1;
+		ui_items="Parallel Strokes\0Focus Point Targeting Strokes\0";
+		ui_label = "The blur type";
+		ui_tooltip = "The blur type. Focus Point Targeting Strokes means the blur directions\nper pixel are towards the Focus Point.";
+	> = 0;
+	uniform float2 FocusPoint <
+		ui_category = "Blur tweaking";
+		ui_label = "Blur focus point";
+		ui_type = "drag";
+		ui_step = 0.001;
+		ui_min = 0.000; ui_max = 1.000;
+		ui_tooltip = "The X and Y coordinates of the blur focus point, which is used for\nthe Blur type 'Focus Point Targeting Strokes'. 0,0 is the\nupper left corner, and 0.5, 0.5 is at the center of the screen.";
+	> = float2(0.5, 0.5);
+	uniform float3 FocusPointBlendColor <
+		ui_category = "Blur tweaking";
+		ui_label = "Focus point color";
+		ui_type= "color";
+		ui_tooltip = "The color of the focus point in Point focused mode. The closer a\npixel is to the focus point, the more it will become this color.\nIn (red , green, blue)";
+	> = float3(0.0,0.0,0.0);
+	uniform float FocusPointBlendFactor <
+		ui_category = "Blur tweaking";
+		ui_label = "Focus point color blend factor";
+		ui_type = "drag";
+		ui_min = 0.000; ui_max = 1.000;
+		ui_step = 0.001;
+		ui_tooltip = "The factor with which the focus point color is blended with the final image";
 	> = 1.000;
 #if CD_DEBUG
 	// ------------- DEBUG
@@ -142,7 +172,7 @@ namespace DirectionalDepthBlur
 	#define BUFFER_SCREEN_SIZE	ReShade::ScreenSize
 #endif
 
-	uniform bool LeftMouseDown < source = "mousebutton"; keycode = 0; toggle = false; >;
+	uniform float2 MouseCoords < source = "mousepoint"; >;
 	
 	texture texDownsampledBackBuffer { Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; Format = RGBA8; };
 	texture texBlurDestination { Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; Format = RGBA8; }; 
@@ -167,6 +197,13 @@ namespace DirectionalDepthBlur
 	//
 	//////////////////////////////////////////////////
 	
+	float2 CalculatePixelDeltas(float2 texCoords)
+	{
+		float2 mouseCoords = MouseCoords * BUFFER_PIXEL_SIZE;
+		
+		return (float2(FocusPoint.x - texCoords.x, FocusPoint.y - texCoords.y)) * length(BUFFER_PIXEL_SIZE);
+	}
+	
 	//////////////////////////////////////////////////
 	//
 	// Vertex Shaders
@@ -185,8 +222,8 @@ namespace DirectionalDepthBlur
 		float pixelSizeLength = length(BUFFER_PIXEL_SIZE);
 		pixelInfo.pixelDelta *= pixelSizeLength;
 		pixelInfo.blurLengthInPixels = length(BUFFER_SCREEN_SIZE) * BlurLength;
-		pixelInfo.focusPlane = (ManualFocusPlane * ManualFocusPlaneMaxRange) / 1000.0; 
-		pixelInfo.focusRange = (FocusRange * ManualFocusPlaneMaxRange) / 1000.0;
+		pixelInfo.focusPlane = (FocusPlane * FocusPlaneMaxRange) / 1000.0; 
+		pixelInfo.focusRange = (FocusRange * FocusPlaneMaxRange) / 1000.0;
 		pixelInfo.texCoordsScaled = float4(pixelInfo.texCoords * ScaleFactor, pixelInfo.texCoords / ScaleFactor);
 		return pixelInfo;
 	}
@@ -202,16 +239,19 @@ namespace DirectionalDepthBlur
 		// pixelInfo.texCoordsScaled.xy is for scaled down UV, pixelInfo.texCoordsScaled.zw is for scaled up UV
 		float3 color = tex2Dlod(samplerDownsampledBackBuffer, float4(pixelInfo.texCoordsScaled.xy, 0, 0)).rgb;
 		float4 average = float4(color, 1.0);
+		float2 pixelDelta = BlurType==0 ? pixelInfo.pixelDelta : CalculatePixelDeltas(pixelInfo.texCoords);
 		for(float tapIndex=0.0;tapIndex<pixelInfo.blurLengthInPixels;tapIndex+=(1/BlurQuality))
 		{
-			float2 tapCoords = (pixelInfo.texCoords + (pixelInfo.pixelDelta * tapIndex));
+			float2 tapCoords = (pixelInfo.texCoords + (pixelDelta * tapIndex));
 			float3 tapColor = tex2Dlod(samplerDownsampledBackBuffer, float4(tapCoords * ScaleFactor, 0, 0)).rgb;
 			float tapDepth = ReShade::GetLinearizedDepth(tapCoords);
 			float weight = tapDepth <= pixelInfo.focusPlane ? 0.0 : 1-(tapIndex/ pixelInfo.blurLengthInPixels);
 			average.rgb+=(tapColor * weight);
 			average.a+=weight;
 		}
+		float distanceToFocusPoint = distance(pixelInfo.texCoords, FocusPoint);
 		fragment.rgb = average.rgb / average.a;
+		fragment.rgb = BlurType==0 ? fragment.rgb : lerp(fragment, lerp(FocusPointBlendColor, fragment.rgb, smoothstep(0, 1, distanceToFocusPoint)), FocusPointBlendFactor);
 		fragment.a = 1.0;
 	}
 
