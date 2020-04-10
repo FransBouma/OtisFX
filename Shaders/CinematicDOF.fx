@@ -313,7 +313,7 @@ namespace CinematicDOF
 		ui_min = 0.00; ui_max = 5.00;
 		ui_tooltip = "The gain for highlights in the near plane. The higher the more a highlight gets\nbrighter. Tweak this in tandem with the Highlight threshold. Best results are\nachieved with bright spots in dark(er) foregrounds.";
 		ui_step = 0.01;
-	> = 0.200;
+	> = 0.000;
 	uniform float HighlightThresholdNearPlane <
 		ui_category = "Highlight tweaking, near plane";
 #if __RESHADE_FXC__		// Freestyle
