@@ -32,6 +32,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // 
 // Version History
+// 13-apr-2020:		v1.1: Added highlight control (I know it flips the hue in focus point mode, it's a bug that actually looks great), 
+//					      higher precision in buffers, better defaults
 // 10-apr-2020:		v1.0: First release
 //
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -91,7 +93,7 @@ namespace DirectionalDepthBlur
 		ui_min = 0.000; ui_max = 1.0;
 		ui_step = 0.001;
 		ui_tooltip = "The length of the blur strokes per pixel. 1.0 is the entire screen.";
-	> = 0.001;
+	> = 0.1;
 	uniform float BlurQuality <
 		ui_category = "Blur tweaking";
 		ui_label = "Blur quality";
@@ -138,6 +140,14 @@ namespace DirectionalDepthBlur
 		ui_step = 0.001;
 		ui_tooltip = "The factor with which the focus point color is blended with the final image";
 	> = 1.000;
+	uniform float HighlightGain <
+		ui_category = "Blur tweaking";
+		ui_label="Highlight gain";
+		ui_type = "drag";
+		ui_min = 0.00; ui_max = 5.00;
+		ui_tooltip = "The gain for highlights in the strokes plane. The higher the more a highlight gets\nbrighter.";
+		ui_step = 0.01;
+	> = 0.500;	
 #if CD_DEBUG
 	// ------------- DEBUG
 	uniform bool DBVal1 <
@@ -174,8 +184,8 @@ namespace DirectionalDepthBlur
 
 	uniform float2 MouseCoords < source = "mousepoint"; >;
 	
-	texture texDownsampledBackBuffer { Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; Format = RGBA8; };
-	texture texBlurDestination { Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; Format = RGBA8; }; 
+	texture texDownsampledBackBuffer { Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; Format = RGBA16F; };
+	texture texBlurDestination { Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; Format = RGBA16F; }; 
 	
 	sampler samplerDownsampledBackBuffer { Texture = texDownsampledBackBuffer; AddressU = MIRROR; AddressV = MIRROR; AddressW = MIRROR;};
 	sampler samplerBlurDestination { Texture = texBlurDestination; };
@@ -202,6 +212,29 @@ namespace DirectionalDepthBlur
 		float2 mouseCoords = MouseCoords * BUFFER_PIXEL_SIZE;
 		
 		return (float2(FocusPoint.x - texCoords.x, FocusPoint.y - texCoords.y)) * length(BUFFER_PIXEL_SIZE);
+	}
+	
+	float3 AccentuateWhites(float3 fragment)
+	{
+		return fragment / (1.5 - clamp(fragment, 0, 1.49));	// accentuate 'whites'. 1.5 factor was empirically determined.
+	}
+	
+	float3 CorrectForWhiteAccentuation(float3 fragment)
+	{
+		return (fragment.rgb * 1.5) / (1.0 + fragment.rgb);		// correct for 'whites' accentuation in taps. 1.5 factor was empirically determined.
+	}
+	
+	float3 PostProcessBlurredFragment(float3 fragment, float maxLuma, float3 averageGained, float normalizationFactor)
+	{
+		const float3 lumaDotWeight = float3(0.3, 0.59, 0.11);
+
+		float newFragmentLuma = dot(fragment, lumaDotWeight);
+		averageGained.rgb = CorrectForWhiteAccentuation(averageGained.rgb);
+		// increase luma to the max luma found on the gained taps. This over-boosts the luma on the averageGained, which we'll use to blend
+		// together with the non-boosted fragment using the normalization factor to smoothly merge the highlights.
+		averageGained.rgb *= 1+saturate(maxLuma-newFragmentLuma);
+		fragment = (1-normalizationFactor) * fragment + normalizationFactor * averageGained.rgb;
+		return fragment;
 	}
 	
 	//////////////////////////////////////////////////
@@ -236,10 +269,13 @@ namespace DirectionalDepthBlur
 
 	void PS_Blur(VSPIXELINFO pixelInfo, out float4 fragment : SV_Target0)
 	{
+		const float3 lumaDotWeight = float3(0.3, 0.59, 0.11);
 		// pixelInfo.texCoordsScaled.xy is for scaled down UV, pixelInfo.texCoordsScaled.zw is for scaled up UV
 		float3 color = tex2Dlod(samplerDownsampledBackBuffer, float4(pixelInfo.texCoordsScaled.xy, 0, 0)).rgb;
 		float4 average = float4(color, 1.0);
+		float3 averageGained = AccentuateWhites(average.rgb);
 		float2 pixelDelta = BlurType==0 ? pixelInfo.pixelDelta : CalculatePixelDeltas(pixelInfo.texCoords);
+		float maxLuma = dot(averageGained.rgb, lumaDotWeight);
 		for(float tapIndex=0.0;tapIndex<pixelInfo.blurLengthInPixels;tapIndex+=(1/BlurQuality))
 		{
 			float2 tapCoords = (pixelInfo.texCoords + (pixelDelta * tapIndex));
@@ -248,10 +284,17 @@ namespace DirectionalDepthBlur
 			float weight = tapDepth <= pixelInfo.focusPlane ? 0.0 : 1-(tapIndex/ pixelInfo.blurLengthInPixels);
 			average.rgb+=(tapColor * weight);
 			average.a+=weight;
+			float3 gainedTap = AccentuateWhites(tapColor.rgb);
+			averageGained += gainedTap * weight;
+			float lumaSample = saturate(dot(gainedTap, lumaDotWeight));
+			maxLuma = weight > 0 ? max(maxLuma, lumaSample) : maxLuma;
 		}
 		float distanceToFocusPoint = distance(pixelInfo.texCoords, FocusPoint);
-		fragment.rgb = average.rgb / average.a;
-		fragment.rgb = BlurType==0 ? fragment.rgb : lerp(fragment, lerp(FocusPointBlendColor, fragment.rgb, smoothstep(0, 1, distanceToFocusPoint)), FocusPointBlendFactor);
+		fragment.rgb = average.rgb / (average.a + (average.a==0));
+		fragment.rgb = BlurType==0 
+							? fragment.rgb
+							: lerp(fragment, lerp(FocusPointBlendColor, fragment.rgb, smoothstep(0, 1, distanceToFocusPoint)), FocusPointBlendFactor);
+		fragment.rgb = PostProcessBlurredFragment(fragment.rgb, saturate(maxLuma), (averageGained / (average.a + (average.a==0))), HighlightGain);
 		fragment.a = 1.0;
 	}
 
