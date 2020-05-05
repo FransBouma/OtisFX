@@ -673,7 +673,7 @@ namespace CinematicDOF
 				float4 tapCoords = float4(blurInfo.texcoord + (pointOffset * currentRingRadiusCoords), 0, 0);
 				float4 tap = tex2Dlod(source, tapCoords);
 				// r contains blurred CoC, g contains original CoC. Original can be negative
-				float2 sampleRadii = tex2Dlod(SamplerCDCoCBlurred, tapCoords).rb;
+				float2 sampleRadii = tex2Dlod(SamplerCDCoCBlurred, tapCoords).rg;
 				float blurredSampleRadius = sampleRadii.r;
 				average.rgb += tap.rgb * weight;
 				average.w += weight;
