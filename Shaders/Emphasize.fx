@@ -67,29 +67,29 @@ uniform float EffectFactor <
 float CalculateDepthDiffCoC(float2 texcoord : TEXCOORD)
 {
 	const float scenedepth = ReShade::GetLinearizedDepth(texcoord);
-	const float scenefocus =  FocusDepth;
-	const float desaturateFullRange = FocusRangeDepth+FocusEdgeDepth;
+	const float scenefocus = FocusDepth;
+	const float desaturateFullRange = FocusRangeDepth + FocusEdgeDepth;
 	float depthdiff;
-	
-	if(Spherical == true)
+
+	if (Spherical == true)
 	{
-		texcoord.x = (texcoord.x-Sphere_FocusHorizontal)*ReShade::ScreenSize.x;
-		texcoord.y = (texcoord.y-Sphere_FocusVertical)*ReShade::ScreenSize.y;
+		texcoord.x = (texcoord.x - Sphere_FocusHorizontal)*ReShade::ScreenSize.x;
+		texcoord.y = (texcoord.y - Sphere_FocusVertical)*ReShade::ScreenSize.y;
 		const float degreePerPixel = Sphere_FieldOfView / ReShade::ScreenSize.x;
-		const float fovDifference = sqrt((texcoord.x*texcoord.x)+(texcoord.y*texcoord.y))*degreePerPixel;
-		depthdiff = sqrt((scenedepth*scenedepth)+(scenefocus*scenefocus)-(2*scenedepth*scenefocus*cos(fovDifference*(2*M_PI/360))));
+		const float fovDifference = sqrt((texcoord.x*texcoord.x) + (texcoord.y*texcoord.y))*degreePerPixel;
+		depthdiff = sqrt((scenedepth*scenedepth) + (scenefocus*scenefocus) - (2 * scenedepth*scenefocus*cos(fovDifference*(2 * M_PI / 360))));
 	}
 	else
 	{
-		depthdiff = abs(scenedepth-scenefocus);
+		depthdiff = abs(scenedepth - scenefocus);
 	}
-	
-	return saturate((depthdiff > desaturateFullRange) ? 1.0 : smoothstep(0, desaturateFullRange, depthdiff));
+
+	return saturate((depthdiff > desaturateFullRange) ? 1.0 : smoothstep(FocusRangeDepth, desaturateFullRange, depthdiff));
 }
 
 void PS_Otis_EMZ_Desaturate(float4 vpos : SV_Position, float2 texcoord : TEXCOORD, out float4 outFragment : SV_Target)
 {
-	const float depthDiffCoC = CalculateDepthDiffCoC(texcoord.xy);	
+	const float depthDiffCoC = CalculateDepthDiffCoC(texcoord.xy);
 	const float4 colFragment = tex2D(ReShade::BackBuffer, texcoord);
 	const float greyscaleAverage = (colFragment.x + colFragment.y + colFragment.z) / 3.0;
 	float4 desColor = float4(greyscaleAverage, greyscaleAverage, greyscaleAverage, depthDiffCoC);
