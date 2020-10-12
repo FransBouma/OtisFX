@@ -35,7 +35,7 @@
 
 namespace MagicBorder
 {
-	#define MAGIC_BORDER_VERSION "v1.0"
+	#define MAGIC_BORDER_VERSION "v1.0.1"
 
 	uniform float LeftTopCornerDepth <
 		ui_label = "Depth of window left top corner";
@@ -68,6 +68,11 @@ namespace MagicBorder
 		ui_step = 0.01;
 		ui_tooltip = "The depth the left bottom corner of the window is placed in the scene.\n0.0 is at the camera, 1000.0 is at the horizon";
 	> = 1.0;
+	
+	uniform bool ShowDepths <
+		ui_label = "Show corner depths";
+		ui_tooltip = "If enabled it will show the depths of each corner. White is far away, black is close to the camera.";
+	> = false;
 	
 	uniform float2 PictureFrameLeftTop <
 		ui_label = "Picture frame left top coord";
@@ -114,26 +119,30 @@ namespace MagicBorder
 		float2 RightTop : TEXCOORD2;
 		float2 RightBottom : TEXCOORD3;
 		float2 LeftBottom : TEXCOORD4;
-		float4 DepthsOfCorners: TEXCOORD5;		// (left top, right top, right bottom, left bottom)
 	};
 	
 	// As we use 4 different depth values, we have to interpolate the depth of the pixel with the passed in coord  based on these
 	float CalculateDepthOfFrameAtCoord(VSBORDERINFO info)
 	{
 		// take the average of the 4 depths, while assigning weights based on how close the coord is to each of them. 
-		float4 depths = info.DepthsOfCorners;
 		float2 coord = info.Texcoord;
-		float distanceToCorner = distance(float2(0, 0), coord);
-		float2 average = float2(depths.x * distanceToCorner, distanceToCorner);
-		distanceToCorner = distance(float2(1, 0), coord);
-		average.x += depths.y * distanceToCorner;
+		
+		// The closer to the corner, the stronger the depth set for that corner has to be taken into account, so the weight is 1-distance_to_corner
+		float distanceToCorner = 1-distance(float2(0, 0), coord);
+		float2 average = float2((LeftTopCornerDepth/1000.0) * distanceToCorner, distanceToCorner);
+		
+		distanceToCorner = 1-distance(float2(1, 0), coord);
+		average.x += ((RightTopCornerDepth/1000.0) * distanceToCorner);
 		average.y += distanceToCorner;
-		distanceToCorner = distance(float2(1, 1), coord);
-		average.x += depths.z * distanceToCorner;
+		
+		distanceToCorner = 1-distance(float2(1, 1), coord);
+		average.x += ((RightBottomCornerDepth/1000.0) * distanceToCorner);
 		average.y += distanceToCorner;
-		distanceToCorner = distance(float2(0, 1), coord);
-		average.x += depths.w * distanceToCorner;
+		
+		distanceToCorner = 1-distance(float2(0, 1), coord);
+		average.x += ((LeftBottomCornerDepth/1000.0) * distanceToCorner);
 		average.y += distanceToCorner;
+		
 		return saturate(average.x/average.y);
 	}
 	
@@ -195,8 +204,6 @@ namespace MagicBorder
 		borderInfo.RightTop = PictureFrameRightTop;
 		borderInfo.LeftBottom = PictureFrameLeftBottom;
 		borderInfo.RightBottom = PictureFrameRightBottom;
-		
-		borderInfo.DepthsOfCorners = float4(LeftTopCornerDepth/1000.0, RightTopCornerDepth/1000.0, RightBottomCornerDepth/1000.0, LeftBottomCornerDepth/1000.0);
 		return borderInfo;
 	}
 	
@@ -216,6 +223,7 @@ namespace MagicBorder
 		float depthOfFrameAtCoord = CalculateDepthOfFrameAtCoord(borderInfo);
 		fragment = isInPictureArea ? PictureFrameColor : BorderColor;
 		fragment = depthFragment > depthOfFrameAtCoord ? lerp(originalFragment, fragment, fragment.a) : originalFragment;
+		fragment = ShowDepths ? float4(depthOfFrameAtCoord, depthOfFrameAtCoord, depthOfFrameAtCoord, 1.0) : fragment;
 	}
 	
 	//////////////////////////////////////////////////
