@@ -1154,7 +1154,7 @@ namespace CinematicDOF
 		float4 originalFragment = tex2D(SamplerCDBuffer4, focusInfo.texcoord);
 		// Dither
 		float2 uv = float2(BUFFER_WIDTH, BUFFER_HEIGHT) / float2( 512.0f, 512.0f ); // create multiplier on texcoord so that we can use 1px size reads on gaussian noise texture (since much smaller than screen)
-		uv.xy = uv.xy * texcoord.xy;
+		uv.xy = uv.xy * focusInfo.texcoord.xy;
 		float noise = tex2D(SamplerCDNoise, uv).x; // read, uv is scaled, sampler is set to tile noise texture (WRAP)
 		fragment.xyz = saturate(fragment.xyz + lerp( -0.5/255.0, 0.5/255.0, noise)); // apply dither
 		// End Dither
