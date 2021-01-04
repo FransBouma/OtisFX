@@ -293,7 +293,7 @@ namespace DirectionalDepthBlur
 		fragment.rgb = average.rgb / (average.a + (average.a==0));
 		fragment.rgb = BlurType==0 
 							? fragment.rgb
-							: lerp(fragment, lerp(FocusPointBlendColor, fragment.rgb, smoothstep(0, 1, distanceToFocusPoint)), FocusPointBlendFactor);
+							: lerp(fragment.rgb, lerp(FocusPointBlendColor, fragment.rgb, smoothstep(0, 1, distanceToFocusPoint)), FocusPointBlendFactor);
 		fragment.rgb = PostProcessBlurredFragment(fragment.rgb, saturate(maxLuma), (averageGained / (average.a + (average.a==0))), HighlightGain);
 		fragment.a = 1.0;
 	}
