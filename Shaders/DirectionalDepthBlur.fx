@@ -175,7 +175,7 @@ namespace DirectionalDepthBlur
 		ui_min = 0.000; ui_max = 1.000;
 		ui_step = 0.001;
 		ui_tooltip = "For Focus Point Targeting Strokes blur type:\nThe rotation factor of the filter circle";
-	> = 0.1;
+	> = 0.0;
 	uniform float FilterCircleFeather <
 		ui_category = "Blur tweaking, Focus Point";
 		ui_label = "Filter circle feather";
@@ -346,9 +346,11 @@ namespace DirectionalDepthBlur
 		float maxLuma = dot(averageGained.rgb, lumaDotWeight);
 		float blurLengthInPixels = pixelInfo.blurLengthInPixels;
 		float alpha = 0.0f;
+		float highlightGainToUse = HighlightGain;
 		if(BlurType==1)
 		{
 			blurLengthInPixels *= filterCircleValue;
+			highlightGainToUse *= filterCircleValue;
 		}
 		for(float tapIndex=0.0;tapIndex<blurLengthInPixels;tapIndex+=(1/BlurQuality))
 		{
@@ -369,7 +371,7 @@ namespace DirectionalDepthBlur
 		fragment.rgb = BlurType==0 
 							? fragment.rgb
 							: lerp(fragment.rgb, saturate(lerp(FocusPointBlendColor, fragment.rgb, smoothstep(0, 1, distanceToFocusPoint))), FocusPointBlendFactor);
-		fragment.rgb = lerp(color, PostProcessBlurredFragment(fragment.rgb, saturate(maxLuma), (averageGained / (average.a + (average.a==0))), HighlightGain), BlendFactor);
+		fragment.rgb = lerp(color, PostProcessBlurredFragment(fragment.rgb, saturate(maxLuma), (averageGained / (average.a + (average.a==0))), highlightGainToUse), BlendFactor);
 		fragment.a = alpha;
 	}
 
