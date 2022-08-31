@@ -32,7 +32,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // 
 // Version History
-// 30-aug-2022: 	v1.3: Added filter circle with feather support for focus point strokes mode.
+// 30-aug-2022: 	v1.3: Added filter circle with feather support for focus point strokes mode, and tweaked some defaults.
 // 18-apr-2020:		v1.2: Added blend factor for blur
 // 13-apr-2020:		v1.1: Added highlight control (I know it flips the hue in focus point mode, it's a bug that actually looks great), 
 //					      higher precision in buffers, better defaults
@@ -192,7 +192,7 @@ namespace DirectionalDepthBlur
 		ui_min = 0.00; ui_max = 10.00;
 		ui_tooltip = "The gain for highlights in the strokes plane. The higher the more a highlight gets\nbrighter.";
 		ui_step = 0.01;
-	> = 0.500;	
+	> = 0.5;	
 	uniform float BlendFactor <
 		ui_category = "Blur tweaking";
 		ui_label="Blend factor";
@@ -345,12 +345,11 @@ namespace DirectionalDepthBlur
 		float2 pixelDelta = BlurType==0 ? pixelInfo.pixelDelta : CalculatePixelDeltas(pixelInfo.texCoords);
 		float maxLuma = dot(averageGained.rgb, lumaDotWeight);
 		float blurLengthInPixels = pixelInfo.blurLengthInPixels;
-		
+		float alpha = 0.0f;
 		if(BlurType==1)
 		{
 			blurLengthInPixels *= filterCircleValue;
 		}
-		
 		for(float tapIndex=0.0;tapIndex<blurLengthInPixels;tapIndex+=(1/BlurQuality))
 		{
 			float2 tapCoords = (pixelInfo.texCoords + (pixelDelta * tapIndex));
@@ -363,14 +362,15 @@ namespace DirectionalDepthBlur
 			averageGained += gainedTap * weight;
 			float lumaSample = saturate(dot(gainedTap, lumaDotWeight));
 			maxLuma = weight > 0 ? max(maxLuma, lumaSample) : maxLuma;
+			alpha = 1.0f;
 		}
 		float distanceToFocusPoint = distance(pixelInfo.texCoords, FocusPoint);
 		fragment.rgb = average.rgb / (average.a + (average.a==0));
 		fragment.rgb = BlurType==0 
 							? fragment.rgb
-							: lerp(fragment.rgb, lerp(FocusPointBlendColor, fragment.rgb, smoothstep(0, 1, distanceToFocusPoint)), FocusPointBlendFactor);
+							: lerp(fragment.rgb, saturate(lerp(FocusPointBlendColor, fragment.rgb, smoothstep(0, 1, distanceToFocusPoint))), FocusPointBlendFactor);
 		fragment.rgb = lerp(color, PostProcessBlurredFragment(fragment.rgb, saturate(maxLuma), (averageGained / (average.a + (average.a==0))), HighlightGain), BlendFactor);
-		fragment.a = 1.0;
+		fragment.a = alpha;
 	}
 
 
@@ -384,17 +384,17 @@ namespace DirectionalDepthBlur
 			fragment = realColor;
 			return;
 		}
-		float3 color = tex2Dlod(samplerBlurDestination, float4(pixelInfo.texCoords, 0, 0)).rgb;
+		float4 color = tex2Dlod(samplerBlurDestination, float4(pixelInfo.texCoords, 0, 0));
 		float rangeEnd = (pixelInfo.focusPlane+pixelInfo.focusRange);
 		float blendFactor = rangeEnd < colorDepth 
 								? 1.0 
 								: smoothstep(0, 1, 1-((rangeEnd-colorDepth) / pixelInfo.focusRange));
-								
+
 		if(BlurType==1 && FocusPointFadeBlurInFeatherBand)
 		{
 			blendFactor *= filterCircleValue;
 		}
-		fragment.rgb = lerp(realColor.rgb, color, blendFactor);
+		fragment.rgb = lerp(realColor.rgb, color.rgb, blendFactor * color.a);
 		if(FocusPointViewFilterCircleOnMouseDown && LeftMouseDown && BlurType==1)
 		{
 			fragment.rgb = lerp(fragment.rgb, float3(1.0f, 1.0f, 1.0f), filterCircleValue * 0.7f);
