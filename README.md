@@ -6,7 +6,7 @@ given version of reshade and modified to use controls which are less precise or 
 not in the reshade repo I use myself to this repository. 
 
 ### Prerequisites
-You should have [Reshade](https://reshade.me) v3.4.x or higher and at least reshade.fxh present in the `reshade-shaders\shaders` folder
+You should have [Reshade](https://reshade.me) v4.x or higher (preferably the latest) and at least reshade.fxh present in the `reshade-shaders\shaders` folder
 
 ### How to install
 Download the zip using the button on the right which says 'Download ZIP'. This will give you a file called 'Master.zip', which contains all code. 
@@ -20,6 +20,8 @@ The following effects are currently included:
 #### Cinematic DOF
 The state of the art depth of field effect I wrote which has all the features you want and need from a depth of field effect: near plane bleed, configurable highlights, 
 high performance, easy to use focusing code and great bokeh. 
+
+The bokeh shapes were created by Moyevka, Murchalloo, K-putt and others.
 
 #### Emphasize
 Emphasize is an effect which allows you to make a part of the scene pop out more while other parts are de-emphasized. This is done by using the 
