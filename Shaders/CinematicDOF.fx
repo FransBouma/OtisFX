@@ -32,6 +32,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // Version history:
+// 16-aug-2023:	   v1.2.10: Added Cone Overlap support so the HDR conversion first desaturates the colors so channels with a high value don't 
+//                          exponentially boost to irrealistic values. Contributed by MartyMcFly.
 // 26-jun-2023:	   v1.2.9:  Found a way to compensate for edges on close to in-focus geometry shimmering through which were otherwise only removable with the NearFarDistanceCompensation added
 //                          in the previous version
 // 13-jun-2023:    v1.2.8:  Added the NearFarDistanceCompensation slider for compensating hard edges on geometry that's out of focus but close to the in-focus plane
@@ -110,7 +112,7 @@
 
 namespace CinematicDOF
 {
-	#define CINEMATIC_DOF_VERSION "v1.2.9"
+	#define CINEMATIC_DOF_VERSION "v1.2.10"
 
 // Uncomment line below for debug info / code / controls
 //	#define CD_DEBUG 1
@@ -537,10 +539,27 @@ namespace CinematicDOF
 	//
 	//////////////////////////////////////////////////
 
+	float3 ConeOverlap(float3 fragment)
+	{
+		float k = 0.4 * 0.33;
+		float2 f = float2(1-2 * k, k);
+		float3x3 m = float3x3(f.xyy, f.yxy, f.yyx);
+		return mul(fragment, m);
+	}
+	
+	float3 ConeOverlapInverse(float3 fragment)
+	{
+		float k = 0.4 * 0.33;
+		float2 f = float2(k-1, k) * rcp(3 * k-1);
+		float3x3 m = float3x3(f.xyy, f.yxy, f.yyx);
+		return mul(fragment, m);
+	}
+
 	float3 AccentuateWhites(float3 fragment)
 	{
 		// apply small tow to the incoming fragment, so the whitepoint gets slightly lower than max.
 		// De-tonemap color (reinhard). Thanks Marty :) 
+		fragment = ConeOverlap(fragment);
 		fragment = pow(abs(fragment), HighlightGammaFactor);
 		return fragment / max((1.001 - (HighlightBoost * fragment)), 0.001);
 	}
@@ -549,7 +568,7 @@ namespace CinematicDOF
 	{
 		// Re-tonemap color (reinhard). Thanks Marty :) 
 		float3 toReturn = fragment / (1.001 + (HighlightBoost * fragment));
-		return pow(abs(toReturn), 1.0/ HighlightGammaFactor);
+		return ConeOverlapInverse(pow(abs(toReturn), 1.0/ HighlightGammaFactor));
 	}
 	
 	// returns 2 vectors, (x,y) are up vector, (z,w) are right vector. 
