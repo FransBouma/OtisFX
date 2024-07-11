@@ -19,6 +19,9 @@
 #ifndef fLUT_LutAmount
 	#define fLUT_LutAmount 18
 #endif
+#ifndef fLUT_Selections
+	#define fLUT_Selections "Neutral\0Color1\0Color2\0Color3 (Blue oriented)\0Color4 (Hollywood)\0Color5\0Color6\0Color7\0Color8\0Cool light\0Flat & green\0Red lift matte\0Cross process\0Azure Red Dual Tone\0Vogue\0Sepia\0\B&W mid constrast\0\B&W high contrast\0"
+#endif
 
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 //
@@ -27,9 +30,9 @@
 uniform int fLUT_LutSelector < 
 	ui_type = "combo";
 	ui_min= 0; ui_max=16;
-	ui_items="Neutral\0Color1\0Color2\0Color3 (Blue oriented)\0Color4 (Hollywood)\0Color5\0Color6\0Color7\0Color8\0Cool light\0Flat & green\0Red lift matte\0Cross process\0Azure Red Dual Tone\0Vogue\0Sepia\0\B&W mid constrast\0\B&W high contrast\0";
+	ui_items = fLUT_Selections;
 	ui_label = "The LUT to use";
-	ui_tooltip = "The LUT to use for color transformation. 'Neutral' doesn't do any color transformation.";
+	ui_tooltip = "The LUT to use for color transformation. 'Neutral' doesn't do any color transformation when using the default texture.";
 > = 0;
 
 uniform float fLUT_AmountChroma <
