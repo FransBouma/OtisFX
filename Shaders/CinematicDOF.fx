@@ -1161,9 +1161,16 @@ namespace CinematicDOF
 		fragment = UseAutoFocus ? lerp(tex2D(SamplerCDPreviousFocus, float2(0, 0)).r, ReShade::GetLinearizedDepth(AutoFocusPoint), AutoFocusTransitionSpeed) 
 								: (manualFocusPlaneValue / 1000);
 #else
+		float previousFocus = tex2D(SamplerCDPreviousFocus, float2(0, 0)).r;
 		float2 autoFocusPointToUse = UseMouseDrivenAutoFocus ? MouseCoords * BUFFER_PIXEL_SIZE : AutoFocusPoint;
-		fragment = UseAutoFocus ? lerp(tex2D(SamplerCDPreviousFocus, float2(0, 0)).r, ReShade::GetLinearizedDepth(autoFocusPointToUse), AutoFocusTransitionSpeed) 
-								: (ManualFocusPlane / 1000);
+		float newFocusTarget = ReShade::GetLinearizedDepth(autoFocusPointToUse);
+
+		if (newFocusTarget >= 0.999f)
+		{
+			newFocusTarget = previousFocus;
+		}
+
+		fragment = UseAutoFocus ? lerp(previousFocus, newFocusTarget, AutoFocusTransitionSpeed) : (ManualFocusPlane / 1000.0f);
 #endif
 	}
 	
